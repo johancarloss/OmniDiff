@@ -1,0 +1,18 @@
+# Private docs (sensitive prompts, internal notes)
+docs/private/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.venv/
+
+# Environment
+.env
+.env.*
+
+# IDE
+.vscode/
+.idea/
