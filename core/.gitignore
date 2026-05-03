@@ -1,0 +1,15 @@
+# Rust build artifacts
+target/
+Cargo.lock.bak
+
+# Maturin / PyO3 build outputs
+*.so
+*.pyd
+*.dylib
+
+# IDE
+.idea/
+.vscode/
+
+# Criterion benchmark output
+target/criterion/

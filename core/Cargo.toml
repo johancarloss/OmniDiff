@@ -1,0 +1,38 @@
+[package]
+name = "omnidiff_core"
+version = "0.1.0"
+edition = "2021"
+description = "Performance-critical Git ingestion layer for OmniDiff (Rust + PyO3)"
+license = "MIT"
+repository = "https://github.com/johancarloss/OmniDiff"
+readme = "README.md"
+
+[lib]
+name = "omnidiff_core"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+pyo3 = { version = "0.22", features = ["extension-module", "abi3-py312"] }
+git2 = { version = "0.19", default-features = false, features = ["vendored-libgit2"] }
+serde = { version = "1.0", features = ["derive"] }
+thiserror = "1.0"
+tiktoken-rs = "0.5"
+rayon = "1.10"
+
+[dev-dependencies]
+criterion = { version = "0.5", features = ["html_reports"] }
+tempfile = "3.10"
+
+[[bench]]
+name = "ingest_bench"
+harness = false
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+strip = true
+
+[profile.bench]
+inherits = "release"
+debug = true

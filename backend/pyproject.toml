@@ -20,6 +20,13 @@ dev = [
     "pytest-asyncio>=0.25",
     "ruff>=0.9",
     "mypy>=1.14",
+    "py-spy>=0.4",          # profiler para Fase 2-B (identificar hot path)
+]
+# Camada Rust (opcional) — instalada via `maturin develop` a partir de `core/`.
+# Não é dependência publicada no PyPI ainda; durante desenvolvimento o módulo
+# `omnidiff_core` é injetado no `.venv` por maturin.
+core = [
+    "maturin>=1.5",
 ]
 
 [build-system]

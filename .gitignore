@@ -36,3 +36,10 @@ Thumbs.db
 
 # Git clones (repos indexed by OmniDiff)
 repos/
+
+# Rust core layer (build artifacts)
+core/target/
+core/Cargo.lock
+*.so
+*.pyd
+*.dylib

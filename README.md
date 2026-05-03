@@ -44,6 +44,7 @@ docker compose up --build
 |-----------|-----------|
 | Frontend | React 19, Tailwind CSS v4, shadcn/ui |
 | Backend | Python, FastAPI, SQLAlchemy 2.0 (async) |
+| Performance layer | Rust + PyO3 (`core/`, work in progress) — Git walking, diff parsing, chunking |
 | Database | PostgreSQL 17 + pgvector (HNSW) |
 | Embeddings | Voyage AI (free tier) or Gemini |
 | LLM | Gemini / Groq (free tiers) |

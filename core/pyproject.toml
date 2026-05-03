@@ -1,0 +1,30 @@
+[build-system]
+requires = ["maturin>=1.5,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "omnidiff-core"
+version = "0.1.0"
+description = "Performance-critical Git ingestion layer for OmniDiff (Rust + PyO3)"
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "MIT" }
+authors = [{ name = "Johan Carlos", email = "johancarlos62@gmail.com" }]
+keywords = ["git", "rust", "embeddings", "rag", "diff", "pyo3"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Rust",
+    "Topic :: Software Development :: Version Control :: Git",
+]
+
+[project.urls]
+Repository = "https://github.com/johancarloss/OmniDiff"
+Issues = "https://github.com/johancarloss/OmniDiff/issues"
+
+[tool.maturin]
+features = ["pyo3/extension-module"]
+module-name = "omnidiff_core"
+python-source = "python"
+strip = true
