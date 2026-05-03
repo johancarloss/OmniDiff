@@ -35,11 +35,9 @@ pub const GENERATED_PATH_FRAGMENTS: &[&str] = &[
 
 /// File extensions treated as binary regardless of git's own detection.
 pub const BINARY_EXTENSIONS: &[&str] = &[
-    "png", "jpg", "jpeg", "gif", "webp", "ico", "bmp", "tiff",
-    "mp3", "mp4", "wav", "avi", "mov", "webm",
-    "pdf", "zip", "tar", "gz", "7z", "rar",
-    "exe", "dll", "so", "dylib", "bin",
-    "woff", "woff2", "ttf", "otf",
+    "png", "jpg", "jpeg", "gif", "webp", "ico", "bmp", "tiff", "mp3", "mp4", "wav", "avi", "mov",
+    "webm", "pdf", "zip", "tar", "gz", "7z", "rar", "exe", "dll", "so", "dylib", "bin", "woff",
+    "woff2", "ttf", "otf",
 ];
 
 /// Return true if this file path should be skipped during indexing.
@@ -81,8 +79,14 @@ mod tests {
 
     #[test]
     fn generated_paths_are_skipped() {
-        assert!(should_skip_file("frontend/node_modules/foo/index.js", false));
-        assert!(should_skip_file("backend/.venv/lib/site-packages/x.py", false));
+        assert!(should_skip_file(
+            "frontend/node_modules/foo/index.js",
+            false
+        ));
+        assert!(should_skip_file(
+            "backend/.venv/lib/site-packages/x.py",
+            false
+        ));
     }
 
     #[test]
@@ -101,6 +105,6 @@ mod tests {
     fn merge_commits_are_skipped() {
         assert!(!should_skip_commit(0)); // root
         assert!(!should_skip_commit(1)); // normal
-        assert!(should_skip_commit(2));  // merge
+        assert!(should_skip_commit(2)); // merge
     }
 }

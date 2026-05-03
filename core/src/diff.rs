@@ -4,6 +4,7 @@
 //! This is intentionally separate from `chunker.rs`:
 //!   - `diff` is about "what changed" (raw structured data)
 //!   - `chunker` is about "how to size the data for embedding"
+//!
 //! Keeping them split lets the chunker stay testable with synthetic input.
 
 use crate::errors::CoreError;
@@ -32,7 +33,7 @@ pub struct FileDiff {
     pub file_path: String,
     pub old_path: Option<String>, // for renames
     pub change_type: ChangeType,
-    pub diff_content: String,     // unified-format text
+    pub diff_content: String, // unified-format text
     pub is_binary: bool,
 }
 
