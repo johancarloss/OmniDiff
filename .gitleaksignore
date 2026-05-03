@@ -1,0 +1,11 @@
+# gitleaks ignore file — fingerprints of false positives.
+#
+# Format: one fingerprint per line. Get fingerprints from gitleaks output
+# (the "Fingerprint:" field shown for each finding) or from the JSON report.
+#
+# Example:
+#   abc123def456:.env.example:generic-api-key:42
+#
+# Only add an entry after confirming the match is genuinely a false positive
+# (e.g. a deliberately-fake API key in an example file). Never silence a
+# real leak.

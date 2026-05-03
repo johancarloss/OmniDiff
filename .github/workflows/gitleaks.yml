@@ -1,0 +1,54 @@
+name: Gitleaks
+
+# Secret scanning — second line of defense after the local pre-commit hook.
+# Catches anything that bypassed the hook (developers without gitleaks installed,
+# `git commit --no-verify`, force-pushes, etc).
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  # Also run on manual trigger so we can re-scan history on demand.
+  workflow_dispatch:
+  # Weekly drift check — catches secrets that were committed and later "fixed"
+  # by a subsequent commit (which doesn't remove them from history).
+  schedule:
+    - cron: "0 6 * * 1"  # Mondays 06:00 UTC
+
+# Job-level permissions following the principle of least privilege.
+# Even if the repo default is permissive ("write-all"), this job only gets
+# what gitleaks actually needs.
+permissions:
+  contents: read              # required: clone the repo
+  pull-requests: write        # optional: post leak findings as PR comments
+  security-events: write      # optional: surface findings in Security tab
+  actions: read               # optional: lets the action read prior runs
+
+jobs:
+  scan:
+    name: Scan for secrets
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # fetch-depth: 0 is REQUIRED — gitleaks scans git history,
+          # not just the working tree. Without this, only HEAD is checked.
+          fetch-depth: 0
+
+      - name: Run gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          # GITHUB_TOKEN is auto-provided by Actions; passing it explicitly
+          # makes the dependency obvious and lets the action create PR
+          # comments on findings.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # GITLEAKS_ENABLE_COMMENTS: post a comment on the PR when leaks
+          # are found (default: true). Useful signal for reviewers.
+          GITLEAKS_ENABLE_COMMENTS: "true"
+          # GITLEAKS_ENABLE_UPLOAD_ARTIFACT: upload the SARIF report so
+          # results show up in the Security tab.
+          GITLEAKS_ENABLE_UPLOAD_ARTIFACT: "true"
+          # GITLEAKS_ENABLE_SUMMARY: write a summary on the run page.
+          GITLEAKS_ENABLE_SUMMARY: "true"
