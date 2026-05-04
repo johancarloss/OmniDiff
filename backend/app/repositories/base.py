@@ -16,9 +16,7 @@ class BaseRepository[ModelT: Base]:
     async def get_by_id(self, entity_id: int) -> ModelT | None:
         return await self._session.get(self._model, entity_id)
 
-    async def get_all(
-        self, *, limit: int = DEFAULT_LIMIT, offset: int = 0
-    ) -> list[ModelT]:
+    async def get_all(self, *, limit: int = DEFAULT_LIMIT, offset: int = 0) -> list[ModelT]:
         stmt = select(self._model).limit(limit).offset(offset)
         result = await self._session.execute(stmt)
         return list(result.scalars().all())
