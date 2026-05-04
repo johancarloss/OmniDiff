@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "Performance-critical Git ingestion layer for OmniDiff (Rust + PyO3)"
 readme = "README.md"
 requires-python = ">=3.12"
-license = { text = "MIT" }
+license = { text = "AGPL-3.0-or-later" }
 authors = [{ name = "Johan Carlos", email = "johancarlos62@gmail.com" }]
 keywords = ["git", "rust", "embeddings", "rag", "diff", "pyo3"]
 classifiers = [

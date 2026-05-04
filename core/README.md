@@ -122,4 +122,5 @@ chunks_per_commit = omnidiff_core.extract_chunks_batch(
 
 ## License
 
-MIT
+AGPL-3.0-or-later — see [`../LICENSE`](../LICENSE) and
+[`../NOTICE.md`](../NOTICE.md) at the repository root.

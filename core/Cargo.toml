@@ -3,7 +3,7 @@ name = "omnidiff_core"
 version = "0.1.0"
 edition = "2021"
 description = "Performance-critical Git ingestion layer for OmniDiff (Rust + PyO3)"
-license = "MIT"
+license = "AGPL-3.0-or-later"
 repository = "https://github.com/johancarloss/OmniDiff"
 readme = "README.md"
 
