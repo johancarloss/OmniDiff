@@ -43,7 +43,10 @@ target-version = "py312"
 line-length = 100
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "N", "UP", "B", "A", "SIM", "TCH"]
+# TCH (type-checking imports) intentionally omitted: with PEP 563/604
+# `from __future__ import annotations` and modern Python 3.12, the runtime
+# benefit of TYPE_CHECKING blocks is negligible while readability cost is real.
+select = ["E", "F", "I", "N", "UP", "B", "A", "SIM"]
 
 [tool.ruff.lint.per-file-ignores]
 "app/api/*.py" = ["B008"]  # Depends() in defaults is standard FastAPI
@@ -53,6 +56,14 @@ python_version = "3.12"
 strict = true
 plugins = ["pydantic.mypy"]
 
+[[tool.mypy.overrides]]
+module = ["pgvector", "pgvector.sqlalchemy"]
+ignore_missing_imports = true
+follow_untyped_imports = true
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+markers = [
+    "integration: requires real Postgres (skip with -m 'not integration')",
+]

@@ -37,8 +37,16 @@ jobs:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
       - run: uv sync --all-extras
-      - run: uv run ruff check app/ tests/
-      - run: uv run pytest tests/ -v
+      - name: Lint (ruff)
+        run: uv run ruff check app/ tests/
+      - name: Format check (ruff)
+        run: uv run ruff format --check app/ tests/
+      - name: Type check (mypy --strict)
+        run: uv run mypy --strict app/
+      - name: Run alembic migrations
+        run: uv run alembic upgrade head
+      - name: Tests
+        run: uv run pytest tests/ -v
 
   frontend:
     runs-on: ubuntu-latest
