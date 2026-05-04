@@ -43,3 +43,6 @@ core/Cargo.lock
 *.so
 *.pyd
 *.dylib
+
+# Claude Code instructions (private to author's workflow)
+CLAUDE.md
