@@ -1,8 +1,0 @@
-blank_issues_enabled: false
-contact_links:
-  - name: Project status
-    url: https://github.com/johancarloss/OmniDiff#current-status
-    about: OmniDiff is a personal portfolio project, developed in phases. See current status before opening an issue.
-  - name: Discussions
-    url: https://github.com/johancarloss/OmniDiff/discussions
-    about: For questions, ideas, or general conversation, prefer Discussions over Issues.
