@@ -1,9 +1,9 @@
 # NOTICE
 
 OmniDiff
-Copyright (C) 2026 Johan Carlos Souza <github.com/johancarloss>
+Copyright (C) 2026 Johan Carlos <github.com/johancarloss>
 
-This project was originally created by **Johan Carlos Souza** on 2026-03-13
+This project was originally created by **Johan Carlos** on 2026-03-13
 and is licensed under the **GNU Affero General Public License v3.0**
 (see [`LICENSE`](./LICENSE)).
 

@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Semantic search for Git commits via embeddings of diffs"
 requires-python = ">=3.12"
 license = { text = "AGPL-3.0-or-later" }
-authors = [{ name = "Johan Carlos Souza" }]
+authors = [{ name = "Johan Carlos" }]
 dependencies = [
     "fastapi>=0.115",
     "uvicorn[standard]>=0.34",

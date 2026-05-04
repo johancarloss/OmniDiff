@@ -2,7 +2,7 @@
 
 > Semantic search for Git commits via embeddings of diffs.
 >
-> Created by **[Johan Carlos Souza](https://github.com/johancarloss)** · 2026 · Licensed under [AGPL-3.0](./LICENSE)
+> Created by **[Johan Carlos](https://github.com/johancarloss)** · 2026 · Licensed under [AGPL-3.0](./LICENSE)
 
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](./LICENSE)
 [![Status](https://img.shields.io/badge/status-in%20development-orange.svg)](#current-status)
@@ -177,7 +177,7 @@ attribution requirements.
 
 ## Author
 
-Created by **Johan Carlos Souza** · [github.com/johancarloss](https://github.com/johancarloss)
+Created by **Johan Carlos** · [github.com/johancarloss](https://github.com/johancarloss)
 
 If you're a recruiter or fellow engineer who finds this project
 interesting and wants to chat about the architecture, performance
