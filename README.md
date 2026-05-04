@@ -145,9 +145,11 @@ project. It is **not** offered as a hosted SaaS — anyone wanting to use
 it on their own data is expected to clone the repo and run it on their
 own infrastructure.
 
-The phased implementation roadmap lives in
-`docs/blueprint/OMNIDIFF-BLUEPRINT.md` (private during development;
-will be opened with the public release).
+A condensed public roadmap is in the table below. The full strategic
+blueprint, phase docs, and tactical slice plans are kept private — they
+contain working notes, open decisions, and internal trade-off discussions
+that aren't meant for general audience. A polished public design
+document will be published alongside the first working prototype.
 
 | Phase | Scope | Status |
 |-------|-------|--------|

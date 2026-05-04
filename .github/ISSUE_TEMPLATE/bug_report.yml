@@ -1,0 +1,52 @@
+name: Bug report
+description: Report a defect in OmniDiff
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        OmniDiff is a personal portfolio project. Issues are welcome but
+        response time is best-effort — typically days, sometimes longer.
+        Pull requests fixing bugs are appreciated; please open the issue
+        first so we can align on the approach.
+
+  - type: input
+    id: version
+    attributes:
+      label: Version / commit
+      description: Output of `git rev-parse HEAD` or release tag
+      placeholder: "ed18fb3 or v0.1.0-alpha"
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: Describe the unexpected behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      description: Minimal sequence of commands or actions that reproduce the issue
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: OS, Python version, Postgres version, etc.
+      render: shell
+    validations:
+      required: false
