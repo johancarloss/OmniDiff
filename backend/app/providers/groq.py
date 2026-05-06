@@ -8,10 +8,6 @@ class GroqLLMProvider(LLMProvider):
     Docs: https://console.groq.com/docs
     """
 
-    def __init__(self, api_key: str, model: str = "llama-3.1-8b-instant") -> None:
-        self._api_key = api_key
-        self._model = model
-
     async def generate(self, prompt: str, *, max_tokens: int = 1024) -> str:
         raise NotImplementedError("Groq generate() will be implemented in Phase 3")
 
@@ -22,9 +18,7 @@ class GroqLLMProvider(LLMProvider):
         *,
         max_tokens: int = 2048,
     ) -> str:
-        raise NotImplementedError(
-            "Groq generate_with_context() will be implemented in Phase 3"
-        )
+        raise NotImplementedError("Groq generate_with_context() will be implemented in Phase 3")
 
     @property
     def provider_name(self) -> str:

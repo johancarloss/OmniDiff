@@ -8,10 +8,6 @@ class VoyageEmbeddingProvider(EmbeddingProvider):
     Docs: https://docs.voyageai.com/
     """
 
-    def __init__(self, api_key: str, model: str = "voyage-code-3") -> None:
-        self._api_key = api_key
-        self._model = model
-
     async def embed(self, texts: list[str]) -> list[list[float]]:
         raise NotImplementedError("Voyage embed() will be implemented in Phase 3")
 

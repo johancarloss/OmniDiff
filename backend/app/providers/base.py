@@ -4,6 +4,10 @@ from abc import ABC, abstractmethod
 class EmbeddingProvider(ABC):
     """Abstract base for embedding providers."""
 
+    def __init__(self, *, api_key: str, model: str) -> None:
+        self._api_key = api_key
+        self._model = model
+
     @abstractmethod
     async def embed(self, texts: list[str]) -> list[list[float]]:
         """Generate embeddings for a batch of texts."""
@@ -26,6 +30,10 @@ class EmbeddingProvider(ABC):
 
 class LLMProvider(ABC):
     """Abstract base for LLM providers."""
+
+    def __init__(self, *, api_key: str, model: str) -> None:
+        self._api_key = api_key
+        self._model = model
 
     @abstractmethod
     async def generate(self, prompt: str, *, max_tokens: int = 1024) -> str:

@@ -26,3 +26,10 @@ class ProviderError(AppError):
             message=f"Provider '{provider}' error: {message}",
             status_code=502,
         )
+
+
+class IngestError(AppError):
+    """Failure during repository ingestion (parse error, lock contention, etc)."""
+
+    def __init__(self, message: str, status_code: int = 500) -> None:
+        super().__init__(message=message, status_code=status_code)

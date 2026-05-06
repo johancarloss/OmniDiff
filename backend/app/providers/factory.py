@@ -30,8 +30,7 @@ def _resolve_api_key(settings: Settings, provider_name: str) -> str:
     api_key: str = getattr(settings, attr_name)
     if not api_key:
         raise ValueError(
-            f"API key '{attr_name}' is empty. "
-            f"Set {attr_name.upper()} in your .env file."
+            f"API key '{attr_name}' is empty. Set {attr_name.upper()} in your .env file."
         )
     return api_key
 
@@ -42,9 +41,7 @@ def create_embedding_provider(settings: Settings) -> EmbeddingProvider:
     provider_class = _EMBEDDING_PROVIDERS.get(provider_name)
     if provider_class is None:
         supported = ", ".join(_EMBEDDING_PROVIDERS.keys())
-        raise ValueError(
-            f"Unknown embedding provider: '{provider_name}'. Supported: {supported}"
-        )
+        raise ValueError(f"Unknown embedding provider: '{provider_name}'. Supported: {supported}")
 
     api_key = _resolve_api_key(settings, provider_name)
     return provider_class(api_key=api_key, model=settings.embedding_model)
@@ -64,9 +61,7 @@ def create_llm_provider(settings: Settings, *, batch: bool = False) -> LLMProvid
     provider_class = _LLM_PROVIDERS.get(provider_name)
     if provider_class is None:
         supported = ", ".join(_LLM_PROVIDERS.keys())
-        raise ValueError(
-            f"Unknown LLM provider: '{provider_name}'. Supported: {supported}"
-        )
+        raise ValueError(f"Unknown LLM provider: '{provider_name}'. Supported: {supported}")
 
     api_key = _resolve_api_key(settings, provider_name)
     return provider_class(api_key=api_key, model=model)

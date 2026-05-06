@@ -1,5 +1,10 @@
 FROM ghcr.io/astral-sh/uv:python3.13-bookworm-slim AS base
 
+# git is required at runtime by IngestService (subprocess + git log).
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends git \
+    && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 
 # Install dependencies (cached layer)
