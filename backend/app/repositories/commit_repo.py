@@ -83,3 +83,20 @@ class CommitRepo(BaseRepository[Commit]):
         )
         result = await self._session.execute(stmt)
         return result.scalar_one_or_none()
+
+    async def get_ids_by_hashes(self, repository_id: int, hashes: list[str]) -> dict[str, int]:
+        """Return ``{hash: commit_id}`` for hashes that exist in this repo.
+
+        Single SELECT regardless of how many hashes were given. Used by
+        `IngestService` to map walker output → DB IDs after a bulk
+        upsert that returned only counts. Will also be used by Slice 3
+        for the incremental indexing path.
+        """
+        if not hashes:
+            return {}
+        stmt = select(Commit.hash, Commit.id).where(
+            Commit.repository_id == repository_id,
+            Commit.hash.in_(hashes),
+        )
+        result = await self._session.execute(stmt)
+        return {row.hash: row.id for row in result.all()}
