@@ -39,7 +39,7 @@ def _git(repo: Path, *args: str) -> None:
 def test_walk_commits_returns_all_linear_commits(tmp_git_repo: Path) -> None:
     """`tmp_git_repo` has 5 linear commits — walk should return all 5
     in chronological order (oldest first)."""
-    metas = walk_commits(tmp_git_repo)
+    metas = walk_commits(tmp_git_repo).metas
     assert len(metas) == 5
     assert [m.message for m in metas] == [
         "commit 0",
@@ -77,11 +77,12 @@ def test_walk_commits_skips_merge_commits(tmp_path: Path) -> None:
     # Merge feature into main (creates a merge commit M with 2 parents)
     _git(repo, "merge", "--no-ff", "-q", "-m", "M", "feature")
 
-    metas = walk_commits(repo)
-    # Should have A, B, C — merge M is skipped
-    messages = [m.message for m in metas]
+    result = walk_commits(repo)
+    # Should have A, B, C — merge M is skipped, skipped_merges == 1.
+    messages = [m.message for m in result.metas]
     assert "M" not in messages
     assert {"A", "B", "C"} == set(messages)
+    assert result.skipped_merges == 1
 
 
 def test_walk_commits_raises_on_missing_path(tmp_path: Path) -> None:
@@ -117,7 +118,7 @@ def test_walk_commits_handles_multiline_message(tmp_path: Path) -> None:
         "body line 1\nbody line 2\nbody line 3",
     )
 
-    metas = walk_commits(repo)
+    metas = walk_commits(repo).metas
     assert len(metas) == 1
     assert "subject line" in metas[0].message
     assert "body line 2" in metas[0].message
@@ -125,7 +126,7 @@ def test_walk_commits_handles_multiline_message(tmp_path: Path) -> None:
 
 def test_get_commit_stats_returns_counts(tmp_git_repo: Path) -> None:
     """First commit of fixture creates one file (1 insertion, 0 deletions)."""
-    metas = walk_commits(tmp_git_repo)
+    metas = walk_commits(tmp_git_repo).metas
     files, ins, dels = get_commit_stats(tmp_git_repo, metas[0].hash)
     assert files == 1
     assert ins >= 1

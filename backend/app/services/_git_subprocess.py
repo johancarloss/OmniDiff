@@ -18,7 +18,7 @@ import subprocess
 from datetime import datetime
 from pathlib import Path
 
-from app.schemas.ingest import CommitMeta
+from app.schemas.ingest import ChangeTypeCode, CommitMeta, FileDiff, WalkResult
 
 # Field separator: ASCII Unit Separator (0x1F). Virtually never appears
 # in commit metadata, so it's safe to use as a delimiter inside one
@@ -81,30 +81,33 @@ def _run_git(repo_path: Path, args: list[str]) -> str:
     return result.stdout.decode("utf-8", errors="replace")
 
 
-def _parse_record(record: str) -> CommitMeta | None:
-    """Parse a single `git log -z` record into a CommitMeta.
+def _parse_record(record: str) -> tuple[CommitMeta | None, bool]:
+    """Parse a single `git log -z` record.
 
-    Returns None for merge commits (parents.split() returns >1 hash) so
-    callers can filter them out cleanly.
+    Returns ``(meta, is_merge)``:
+      - ``meta`` is None when the record is malformed OR is a merge.
+      - ``is_merge`` distinguishes "skipped because merge" from
+        "skipped because malformed" so the walker can count merges
+        accurately.
     """
     fields = record.split(FIELD_SEP)
     if len(fields) != 6:
         # Malformed record — skip rather than crash.
-        return None
+        return (None, False)
 
     sha, name, email, date_iso, parents_str, body = fields
     parents = parents_str.split() if parents_str else []
 
     # Skip merge commits (>1 parent) — Phase 2-A doesn't index them.
     if len(parents) > 1:
-        return None
+        return (None, True)
 
     try:
         committed_at = datetime.fromisoformat(date_iso)
     except ValueError:
-        return None
+        return (None, False)
 
-    return CommitMeta(
+    meta = CommitMeta(
         hash=sha,
         author_name=name or None,
         author_email=email or None,
@@ -113,13 +116,18 @@ def _parse_record(record: str) -> CommitMeta | None:
         parents=parents,
         # Stats are filled in later by get_commit_stats — kept zero here.
     )
+    return (meta, False)
 
 
-def walk_commits(repo_path: Path) -> list[CommitMeta]:
+def walk_commits(repo_path: Path) -> WalkResult:
     """Run `git log` in the given repo and return all (non-merge) commits.
 
-    Commits are returned in CHRONOLOGICAL order (oldest first), which
-    matches what Phase 3 wants for incremental embedding.
+    Returns a WalkResult with:
+        - metas: commits in CHRONOLOGICAL order (oldest first), excluding
+          merge commits — that's what Phase 3 wants for incremental
+          embedding.
+        - skipped_merges: count of merge commits filtered out, surfaced
+          via IndexResult so callers can report it.
 
     Raises `GitSubprocessError` on any git failure (missing repo, no
     permissions, malformed output, etc).
@@ -137,11 +145,14 @@ def walk_commits(repo_path: Path) -> list[CommitMeta]:
     records = [r for r in stdout.split("\x00") if r]
 
     metas: list[CommitMeta] = []
+    skipped_merges = 0
     for record in records:
-        meta = _parse_record(record)
-        if meta is not None:
+        meta, is_merge = _parse_record(record)
+        if is_merge:
+            skipped_merges += 1
+        elif meta is not None:
             metas.append(meta)
-    return metas
+    return WalkResult(metas=metas, skipped_merges=skipped_merges)
 
 
 def get_commit_stats(repo_path: Path, commit_hash: str) -> tuple[int, int, int]:
@@ -168,3 +179,158 @@ def get_commit_stats(repo_path: Path, commit_hash: str) -> tuple[int, int, int]:
         dels = int(match.group("dels") or 0)
         return (files, ins, dels)
     return (0, 0, 0)
+
+
+# Diff content above this size triggers a `truncated=True` FileDiff. The
+# chunker turns those into stub chunks (no embedding). 10 MiB matches
+# `MAX_DIFF_BYTES` in `ingest_chunker.py` — kept duplicated here on
+# purpose so each module can be tested independently.
+MAX_DIFF_BYTES_PER_FILE = 10 * 1024 * 1024
+
+# Marker emitted by `git show -U3` for binary files in place of content.
+# Stable across git versions since 2010+.
+BINARY_MARKER = "Binary files "
+
+# Maps the one-letter status from `git show --raw` to the schema enum.
+# `git diff` may also emit M/A/D/R/C/T/U; we treat C (copy) as A and
+# T (type change) / U (unmerged) as M for now — they're rare in
+# real-world history and Slice 2 doesn't need finer granularity.
+_STATUS_MAP: dict[str, ChangeTypeCode] = {
+    "A": "A",
+    "M": "M",
+    "D": "D",
+    "R": "R",
+    "C": "A",
+    "T": "M",
+    "U": "M",
+}
+
+
+def _parse_raw_status(stdout: str) -> list[tuple[ChangeTypeCode, str, str | None]]:
+    """Parse `git show --raw` output.
+
+    Returns list of (change_type, path, old_path). For non-renames,
+    old_path is None.
+
+    Sample line (tab-separated after the metadata prefix):
+        :100644 100644 hashA hashB M\tbackend/app/main.py
+        :100644 100644 hashC hashD R087\told/path.py\tnew/path.py
+    """
+    out: list[tuple[ChangeTypeCode, str, str | None]] = []
+    for line in stdout.splitlines():
+        if not line.startswith(":"):
+            continue
+        # Split on tab — paths come after the metadata block.
+        parts = line.split("\t")
+        if len(parts) < 2:
+            continue
+
+        # Metadata block ends with the status code (M, A, R087, etc).
+        meta_fields = parts[0].split()
+        if not meta_fields:
+            continue
+        status_token = meta_fields[-1]
+        # Renames/copies look like "R087" (similarity score). First letter
+        # is the status; we ignore the score for now.
+        status_letter = status_token[0].upper()
+        change = _STATUS_MAP.get(status_letter)
+        if change is None:
+            continue
+
+        if change == "R" and len(parts) >= 3:
+            out.append((change, parts[2], parts[1]))  # (R, new_path, old_path)
+        else:
+            out.append((change, parts[1], None))
+    return out
+
+
+def _split_show_output_by_file(stdout: str) -> dict[str, str]:
+    """Split `git show -U3` output into per-file diff blocks.
+
+    Keys are the `b/` (target) path from each `diff --git` header; values
+    are the diff content for that file (header included so chunker has
+    context).
+
+    For binary files, the content includes the `Binary files ... differ`
+    marker — caller checks for that to set `is_binary`.
+    """
+    blocks: dict[str, str] = {}
+    current_path: str | None = None
+    current_lines: list[str] = []
+
+    for line in stdout.splitlines(keepends=True):
+        if line.startswith("diff --git "):
+            # Flush previous block.
+            if current_path is not None:
+                blocks[current_path] = "".join(current_lines)
+            current_lines = [line]
+            # Header format: `diff --git a/<path> b/<path>` (paths quoted
+            # if they contain special chars). Take the b/ path as key.
+            header = line.rstrip("\n")
+            try:
+                b_part = header.rsplit(" b/", 1)[1]
+                current_path = b_part.strip().strip('"')
+            except IndexError:
+                current_path = None
+        else:
+            if current_path is not None:
+                current_lines.append(line)
+
+    if current_path is not None:
+        blocks[current_path] = "".join(current_lines)
+
+    return blocks
+
+
+def extract_file_diffs(repo_path: Path, commit_hash: str) -> list[FileDiff]:
+    """Extract per-file diffs for a single commit.
+
+    Two-pass strategy:
+      1. `git show --raw` is authoritative for file metadata
+         (change_type, old_path on rename). Reliable parser, stable format.
+      2. `git show -U3 --no-color` produces the diff content. Match each
+         entry in the raw list to the corresponding diff block.
+
+    Files marked binary by git get `is_binary=True` and empty content.
+    Files where diff_content > MAX_DIFF_BYTES_PER_FILE get
+    `truncated=True` — the chunker emits a stub chunk for those.
+
+    Root commits (no parent) are handled by `git show --root --raw` /
+    `git show --root -U3`, which forces a diff against the empty tree.
+    """
+    # --root makes both calls work for the very first commit too.
+    raw_args = ["show", "--root", "--raw", "--no-color", "--format=", commit_hash]
+    show_args = ["show", "--root", "-U3", "--no-color", "--format=", commit_hash]
+
+    raw_stdout = _run_git(repo_path, raw_args)
+    show_stdout = _run_git(repo_path, show_args)
+
+    raw_entries = _parse_raw_status(raw_stdout)
+    diff_blocks = _split_show_output_by_file(show_stdout)
+
+    file_diffs: list[FileDiff] = []
+    for change_type, path, old_path in raw_entries:
+        diff_content = diff_blocks.get(path, "")
+
+        # Truncate ahead of the binary check so we don't pay UTF-8 work
+        # on a 50MB blob just to decide it's binary.
+        truncated = len(diff_content.encode("utf-8")) > MAX_DIFF_BYTES_PER_FILE
+        if truncated:
+            diff_content = ""
+
+        is_binary = BINARY_MARKER in diff_content
+        if is_binary:
+            diff_content = ""
+
+        file_diffs.append(
+            FileDiff(
+                file_path=path,
+                old_path=old_path,
+                change_type=change_type,
+                diff_content=diff_content,
+                is_binary=is_binary,
+                truncated=truncated,
+            )
+        )
+
+    return file_diffs

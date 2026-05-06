@@ -1,6 +1,11 @@
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field
+
+# One-letter codes matching `git diff --name-status` output.
+ChangeTypeCode = Literal["A", "M", "D", "R"]
+ChunkTypeCode = Literal["file", "hunk"]
 
 
 class CommitMeta(BaseModel):
@@ -23,11 +28,53 @@ class CommitMeta(BaseModel):
     deletions: int = 0
 
 
+class FileDiff(BaseModel):
+    """One file's diff inside a commit.
+
+    Output of `_git_subprocess.extract_file_diffs`, input to the chunker.
+    Mirrors the Rust struct `core::diff::FileDiff`.
+    """
+
+    file_path: str
+    # old_path is set only when change_type == "R" (rename).
+    old_path: str | None = None
+    change_type: ChangeTypeCode
+    diff_content: str
+    is_binary: bool = False
+    # Set by the diff extractor when `len(diff_content) > MAX_DIFF_BYTES`.
+    # The chunker translates this into a stub chunk so embedding is skipped.
+    truncated: bool = False
+
+
+class Chunk(BaseModel):
+    """An embeddable slice of a file's diff.
+
+    Output of the chunker, input to `ChunkRepo.bulk_insert`. Maps 1:1 to
+    a row in `commit_chunks` (minus FK and surrogate id).
+    """
+
+    file_path: str
+    old_path: str | None = None
+    change_type: ChangeTypeCode
+    chunk_type: ChunkTypeCode
+    diff_content: str
+    tokens_used: int
+
+
+class WalkResult(BaseModel):
+    """Output of the walker — used by `IngestService` to populate
+    `IndexResult.skipped_merges` accurately."""
+
+    metas: list[CommitMeta]
+    skipped_merges: int = 0
+
+
 class IndexResult(BaseModel):
     """Outcome of a single `IngestService.index()` call."""
 
     repository_id: int
     total_commits_seen: int
     commits_inserted: int
+    chunks_inserted: int = 0
     skipped_merges: int = 0
     duration_seconds: float
