@@ -14,6 +14,7 @@ dependencies = [
     "alembic>=1.14",
     "pydantic-settings>=2.7",
     "httpx>=0.28",
+    "tiktoken>=0.12.0",
 ]
 
 [project.optional-dependencies]
@@ -58,6 +59,11 @@ plugins = ["pydantic.mypy"]
 
 [[tool.mypy.overrides]]
 module = ["pgvector", "pgvector.sqlalchemy"]
+ignore_missing_imports = true
+follow_untyped_imports = true
+
+[[tool.mypy.overrides]]
+module = ["tiktoken", "tiktoken.*"]
 ignore_missing_imports = true
 follow_untyped_imports = true
 
