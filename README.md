@@ -75,7 +75,7 @@ This is the same pattern used by `uv`, `ruff`, and `pydantic-core`.
 │   FRONTEND                                                        │
 │   React 19 · Tailwind CSS v4 · shadcn/ui · Motion                │
 └────────────────────────┬─────────────────────────────────────────┘
-                         │ POST /api/search
+                         │ POST /api/v1/search
                          ▼
 ┌──────────────────────────────────────────────────────────────────┐
 │   BACKEND  (Python — orchestration)                               │
@@ -154,8 +154,8 @@ document will be published alongside the first working prototype.
 | Phase | Scope | Status |
 |-------|-------|--------|
 | 1 | Setup & infrastructure (Docker Compose, FastAPI bootstrap, schema, providers) | ✅ Complete |
-| 2-A | Git ingestion pipeline (Python baseline) | 🚧 In progress |
-| 2-B | Profiling — identify the hot path | ⏳ Planned |
+| 2-A | Git ingestion pipeline (Python baseline) | ✅ Complete |
+| 2-B | Profiling — identify the hot path | 🚧 Next |
 | 2-C | Performance layer in Rust (port hot path via PyO3) | ⏳ Planned |
 | 3 | Embedding pipeline (Voyage + Groq descriptions, HNSW index) | ⏳ Planned |
 | 4 | Search engine (semantic + keyword + RRF + LLM explanation) | ⏳ Planned |
