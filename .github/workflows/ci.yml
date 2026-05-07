@@ -38,11 +38,11 @@ jobs:
       - uses: astral-sh/setup-uv@v5
       - run: uv sync --all-extras
       - name: Lint (ruff)
-        run: uv run ruff check app/ tests/
+        run: uv run ruff check app/ cli/ tests/
       - name: Format check (ruff)
-        run: uv run ruff format --check app/ tests/
+        run: uv run ruff format --check app/ cli/ tests/
       - name: Type check (mypy --strict)
-        run: uv run mypy --strict app/
+        run: uv run mypy --strict app/ cli/
       - name: Run alembic migrations
         run: uv run alembic upgrade head
       - name: Tests
