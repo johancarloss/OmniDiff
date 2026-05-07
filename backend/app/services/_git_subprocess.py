@@ -119,8 +119,27 @@ def _parse_record(record: str) -> tuple[CommitMeta | None, bool]:
     return (meta, False)
 
 
-def walk_commits(repo_path: Path) -> WalkResult:
+def walk_commits(
+    repo_path: Path,
+    *,
+    since: str | None = None,
+    branch: str | None = None,
+) -> WalkResult:
     """Run `git log` in the given repo and return all (non-merge) commits.
+
+    Args:
+        repo_path: filesystem path to a cloned repo (must contain `.git/`).
+        since: optional commit hash. When provided, the walker uses
+            `git log <since>..<target>` and returns only commits reachable
+            from `<target>` but not from `since`. Used by the incremental
+            indexing path. If `since` is an unknown/orphaned hash (e.g.
+            after a force-push reshaping history), git fails with
+            exit 128 and `GitSubprocessError` propagates — the caller
+            can fall back to a full walk.
+        branch: optional branch / ref name to walk (e.g. `"main"`,
+            `"origin/dev"`, or a tag). When None, the walker uses
+            whatever HEAD points to in the working tree. An unknown
+            branch name produces `GitSubprocessError`.
 
     Returns a WalkResult with:
         - metas: commits in CHRONOLOGICAL order (oldest first), excluding
@@ -130,15 +149,28 @@ def walk_commits(repo_path: Path) -> WalkResult:
           via IndexResult so callers can report it.
 
     Raises `GitSubprocessError` on any git failure (missing repo, no
-    permissions, malformed output, etc).
+    permissions, unknown `since` hash, unknown branch, malformed output,
+    etc).
     """
     if not repo_path.exists():
         raise GitSubprocessError(f"path does not exist: {repo_path}")
 
-    stdout = _run_git(
-        repo_path,
-        ["log", "-z", "--reverse", f"--format={GIT_LOG_FORMAT}"],
-    )
+    # Target ref for the walk. Defaults to HEAD (matches `git log` default).
+    target = branch if branch is not None else "HEAD"
+
+    args = ["log", "-z", "--reverse", f"--format={GIT_LOG_FORMAT}"]
+    if since is not None:
+        # `<since>..<target>` syntax: commits reachable from `<target>` but
+        # not from `<since>`. Fails with exit 128 if either revision is
+        # unknown.
+        args.append(f"{since}..{target}")
+    elif branch is not None:
+        # No `since`, but explicit branch: `git log <branch>` ignores HEAD
+        # and walks from the given ref.
+        args.append(branch)
+    # else: bare `git log` uses HEAD — current working-tree behavior.
+
+    stdout = _run_git(repo_path, args)
 
     # `git log -z` separates records with `\x00`. There is a trailing
     # null after the last record, producing one empty string after split.

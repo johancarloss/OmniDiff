@@ -42,8 +42,17 @@ class IngestService:
         *,
         url: str,
         name: str,
+        branch: str | None = None,
     ) -> IndexResult:
         """Index a Git repository at the given local path.
+
+        Args:
+            repo_path: filesystem path of a cloned repo.
+            url: canonical URL recorded in the `repositories` row (used
+                also as the advisory lock key).
+            name: human-readable name for the row.
+            branch: optional ref to walk (e.g. "main"). When None, walks
+                whatever HEAD points to in the working tree.
 
         Steps:
             1. Get-or-create the Repository row (by URL).
@@ -77,10 +86,37 @@ class IngestService:
             # Walking + stats happen OUTSIDE any DB transaction we care
             # about — subprocess can take minutes on large repos and we
             # don't want to hold the connection pool hostage.
+            #
+            # Incremental indexing: if this repo was indexed before, its
+            # `last_indexed_hash` is the resume point. We pass it to the
+            # walker as `since=...` so git only emits commits after it.
+            #
+            # Force-push handling: if `last_indexed_hash` no longer exists
+            # in the repo (rewritten history), the walker raises
+            # GitSubprocessError. Fall back to a full walk + log a warning
+            # rather than failing the whole indexing job.
+            since_hash = repo.last_indexed_hash
+            was_incremental = since_hash is not None
             try:
-                walk_result = walk_commits(repo_path)
+                walk_result = walk_commits(repo_path, since=since_hash, branch=branch)
             except GitSubprocessError as exc:
-                raise IngestError(f"failed to walk repo: {exc}", status_code=500) from exc
+                if since_hash is not None:
+                    logger.warning(
+                        "incremental walk failed (force-push or orphaned hash?); "
+                        "falling back to full index for repo=%s: %s",
+                        url,
+                        exc,
+                    )
+                    was_incremental = False
+                    since_hash = None
+                    try:
+                        walk_result = walk_commits(repo_path, branch=branch)
+                    except GitSubprocessError as inner:
+                        raise IngestError(
+                            f"failed to walk repo: {inner}", status_code=500
+                        ) from inner
+                else:
+                    raise IngestError(f"failed to walk repo: {exc}", status_code=500) from exc
 
             metas = walk_result.metas
 
@@ -126,12 +162,14 @@ class IngestService:
 
             duration = perf_counter() - start
             logger.info(
-                "indexed repo=%s seen=%d inserted=%d chunks=%d merges=%d duration=%.2fs",
+                "indexed repo=%s seen=%d inserted=%d chunks=%d merges=%d "
+                "incremental=%s duration=%.2fs",
                 url,
                 len(metas),
                 commits_inserted,
                 chunks_inserted,
                 walk_result.skipped_merges,
+                was_incremental,
                 duration,
             )
             return IndexResult(
@@ -141,6 +179,8 @@ class IngestService:
                 chunks_inserted=chunks_inserted,
                 skipped_merges=walk_result.skipped_merges,
                 duration_seconds=duration,
+                was_incremental=was_incremental,
+                since_hash=since_hash,
             )
         except Exception as exc:
             await self._repo_repo.mark_status(repo, IndexingStatus.FAILED, error=str(exc))

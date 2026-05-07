@@ -139,3 +139,77 @@ def test_get_commit_stats_returns_zeros_on_unknown_hash(
     """Unknown commit hash should degrade to (0, 0, 0), not raise."""
     files, ins, dels = get_commit_stats(tmp_git_repo, "0" * 40)
     assert (files, ins, dels) == (0, 0, 0)
+
+
+def test_walk_commits_with_since_returns_only_new(tmp_git_repo: Path) -> None:
+    """`tmp_git_repo` has 5 linear commits; passing the hash of the third
+    commit as `since` must return only the 2 commits after it."""
+    all_metas = walk_commits(tmp_git_repo).metas
+    assert len(all_metas) == 5
+
+    # Use commit index 2 (third in chronological order) as the cutoff.
+    cutoff_hash = all_metas[2].hash
+
+    incremental = walk_commits(tmp_git_repo, since=cutoff_hash).metas
+    assert len(incremental) == 2
+    assert incremental[0].hash == all_metas[3].hash
+    assert incremental[1].hash == all_metas[4].hash
+
+
+def test_walk_commits_with_unknown_since_raises(tmp_git_repo: Path) -> None:
+    """A `since` hash that doesn't exist in the repo (e.g. after a
+    force-push) must raise GitSubprocessError, letting the caller decide
+    whether to fall back to a full walk."""
+    with pytest.raises(GitSubprocessError):
+        walk_commits(tmp_git_repo, since="0" * 40)
+
+
+def test_walk_commits_with_branch_walks_only_that_branch(tmp_path: Path) -> None:
+    """`branch=<name>` walks the named ref instead of HEAD.
+
+    Build a repo where `main` has 2 commits and a divergent `feature`
+    branch (sharing the first commit, then 3 unique ones). Confirm:
+      - walk(branch="main") sees 2
+      - walk(branch="feature") sees 4 (1 shared root + 3 unique)
+      - walk() (no branch arg) defaults to whatever HEAD points to
+    """
+    repo = tmp_path / "branchy_repo"
+    repo.mkdir()
+    _git(repo, "init", "-q", "--initial-branch=main")
+    _git(repo, "config", "--local", "commit.gpgsign", "false")
+
+    # main: shared root + 1 main-only commit.
+    (repo / "root.txt").write_text("root")
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-q", "-m", "shared root")
+    (repo / "main_only.txt").write_text("main")
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-q", "-m", "main only")
+
+    # feature: branches off after root, adds 3 commits.
+    _git(repo, "checkout", "-q", "-b", "feature", "HEAD~1")
+    for i in range(3):
+        (repo / f"feature_{i}.txt").write_text(f"feature {i}")
+        _git(repo, "add", ".")
+        _git(repo, "commit", "-q", "-m", f"feature {i}")
+
+    main_metas = walk_commits(repo, branch="main").metas
+    feature_metas = walk_commits(repo, branch="feature").metas
+
+    assert len(main_metas) == 2
+    assert {m.message for m in main_metas} == {"shared root", "main only"}
+
+    assert len(feature_metas) == 4
+    assert "main only" not in {m.message for m in feature_metas}
+
+    # Default (no branch) follows HEAD, which is `feature` after the
+    # last checkout above.
+    head_metas = walk_commits(repo).metas
+    assert {m.message for m in head_metas} == {m.message for m in feature_metas}
+
+
+def test_walk_commits_with_unknown_branch_raises(tmp_git_repo: Path) -> None:
+    """An unknown branch name must surface as GitSubprocessError so the
+    caller can map it to an exit code rather than crashing."""
+    with pytest.raises(GitSubprocessError):
+        walk_commits(tmp_git_repo, branch="branch-that-does-not-exist")
