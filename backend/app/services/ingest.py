@@ -42,8 +42,17 @@ class IngestService:
         *,
         url: str,
         name: str,
+        branch: str | None = None,
     ) -> IndexResult:
         """Index a Git repository at the given local path.
+
+        Args:
+            repo_path: filesystem path of a cloned repo.
+            url: canonical URL recorded in the `repositories` row (used
+                also as the advisory lock key).
+            name: human-readable name for the row.
+            branch: optional ref to walk (e.g. "main"). When None, walks
+                whatever HEAD points to in the working tree.
 
         Steps:
             1. Get-or-create the Repository row (by URL).
@@ -89,7 +98,7 @@ class IngestService:
             since_hash = repo.last_indexed_hash
             was_incremental = since_hash is not None
             try:
-                walk_result = walk_commits(repo_path, since=since_hash)
+                walk_result = walk_commits(repo_path, since=since_hash, branch=branch)
             except GitSubprocessError as exc:
                 if since_hash is not None:
                     logger.warning(
@@ -101,7 +110,7 @@ class IngestService:
                     was_incremental = False
                     since_hash = None
                     try:
-                        walk_result = walk_commits(repo_path)
+                        walk_result = walk_commits(repo_path, branch=branch)
                     except GitSubprocessError as inner:
                         raise IngestError(
                             f"failed to walk repo: {inner}", status_code=500

@@ -42,6 +42,14 @@ def _build_parser() -> argparse.ArgumentParser:
         default=Path("repos"),
         help="where to clone remote repos (default: ./repos)",
     )
+    idx.add_argument(
+        "--branch",
+        default=None,
+        help=(
+            "branch or ref to index (e.g. main, origin/dev, v1.0.0). "
+            "Defaults to whatever HEAD points to in the working tree."
+        ),
+    )
 
     return parser
 
@@ -56,7 +64,7 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     if args.command == "index":
-        return asyncio.run(run_index(args.repo, args.repos_dir))
+        return asyncio.run(run_index(args.repo, args.repos_dir, branch=args.branch))
 
     # argparse with required=True on subparsers makes this unreachable,
     # but keep a defensive fallback to avoid silent zero-exit on bugs.

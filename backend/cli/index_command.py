@@ -35,8 +35,15 @@ EXIT_LOCKED = 3
 EXIT_UNEXPECTED = 4
 
 
-async def run_index(arg: str, repos_dir: Path) -> int:
-    """Run the `index` subcommand. Returns the process exit code."""
+async def run_index(arg: str, repos_dir: Path, *, branch: str | None = None) -> int:
+    """Run the `index` subcommand. Returns the process exit code.
+
+    Args:
+        arg: URL of the repo OR path to an existing local clone.
+        repos_dir: where to clone remote repos when `arg` is a URL.
+        branch: optional ref to index. None = whatever HEAD points to
+            in the working tree (current `git log` default).
+    """
     # Step 1: resolve arg → local clone (or raise CLIError on bad input).
     try:
         local_path, url, name = ensure_local_clone(arg, repos_dir)
@@ -60,7 +67,7 @@ async def run_index(arg: str, repos_dir: Path) -> int:
     try:
         async with cli_session() as session:
             service = IngestService(session)
-            result = await service.index(local_path, url=url, name=name)
+            result = await service.index(local_path, url=url, name=name, branch=branch)
     except IngestError as exc:
         if exc.status_code == 409:
             logger.error("indexing already in progress for %s", url)
@@ -72,8 +79,10 @@ async def run_index(arg: str, repos_dir: Path) -> int:
         return EXIT_UNEXPECTED
 
     logger.info(
-        "done: repo=%s seen=%d inserted=%d chunks=%d merges=%d incremental=%s duration=%.1fs",
+        "done: repo=%s branch=%s seen=%d inserted=%d chunks=%d merges=%d "
+        "incremental=%s duration=%.1fs",
         url,
+        branch or "HEAD",
         result.total_commits_seen,
         result.commits_inserted,
         result.chunks_inserted,

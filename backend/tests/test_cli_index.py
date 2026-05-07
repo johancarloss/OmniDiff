@@ -112,6 +112,42 @@ def test_cli_no_subcommand_returns_usage_error(
     assert exc_info.value.code == 2
 
 
+def test_cli_index_with_branch_flag_walks_only_named_branch(
+    db_engine: object, tmp_path: Path
+) -> None:
+    """`--branch <name>` indexes only the commits reachable from that
+    ref, even when HEAD of the working tree points elsewhere.
+
+    Repo setup:
+      - main: 1 root commit
+      - feature: same root + 2 unique commits (HEAD ends here)
+
+    Indexing with `--branch main` must see 1 commit (root only),
+    not 3 (feature's full history).
+    """
+    repo = tmp_path / "branchy"
+    repo.mkdir()
+    _git(repo, "init", "-q", "--initial-branch=main")
+    _git(repo, "config", "--local", "commit.gpgsign", "false")
+    (repo / "root.txt").write_text("root")
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-q", "-m", "root")
+
+    _git(repo, "checkout", "-q", "-b", "feature")
+    for i in range(2):
+        (repo / f"f{i}.txt").write_text(f"feature {i}")
+        _git(repo, "add", ".")
+        _git(repo, "commit", "-q", "-m", f"feature {i}")
+
+    # HEAD now points to `feature` (3 commits visible from HEAD).
+    # `--branch main` must restrict the walk to main's 1 commit.
+    import asyncio
+
+    exit_code = main(["index", str(repo), "--branch", "main"])
+    assert exit_code == EXIT_OK
+    assert asyncio.run(_count_commits()) == 1
+
+
 def test_cli_index_via_file_url_clones_into_repos_dir(db_engine: object, tmp_path: Path) -> None:
     """Passing a `file://` URL triggers the clone path: the helper
     clones into `repos/<derived_name>` and indexes from there."""
