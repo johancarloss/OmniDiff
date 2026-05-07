@@ -1,7 +1,7 @@
 """HTTP endpoints for repository indexing.
 
-    POST /api/index               schedule a new indexing job
-    GET  /api/index/{job_id}      poll job status
+    POST /api/v1/index               schedule a new indexing job
+    GET  /api/v1/index/{job_id}      poll job status
 
 The POST handler is intentionally short: it validates input, ensures
 a `Repository` row exists (so it can return a stable `job_id`), and
@@ -14,6 +14,12 @@ duration of the index. Adequate for demo and low-volume self-hosted
 use; for production fan-out, swap to a worker queue (Arq/Celery) —
 the swap is localized to this file (`run_index_job` is queue-agnostic).
 See deferred-work entry [DW-002].
+
+Versioning policy: domain endpoints live under `/api/v<N>/...`. New
+breaking changes go under a new prefix (e.g. `/api/v2/...`) running
+alongside `/api/v1/...` for a deprecation window. Meta-endpoints like
+`/health` and `/docs` are NOT versioned — they describe the server,
+not the API contract.
 """
 
 from __future__ import annotations
@@ -35,7 +41,7 @@ from app.schemas.indexing import (
 from app.services.clone import derive_repo_name
 from app.services.indexing_runner import run_index_job
 
-router = APIRouter(prefix="/api", tags=["indexing"])
+router = APIRouter(prefix="/api/v1", tags=["indexing"])
 
 
 @router.post(

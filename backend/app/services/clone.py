@@ -1,7 +1,7 @@
 """Resolve a repository source (URL or local path) into a usable local clone.
 
 This helper is shared between the CLI (`python -m cli index ...`) and the
-HTTP endpoint (`POST /api/index`) — both need to take an arbitrary
+HTTP endpoint (`POST /api/v1/index`) — both need to take an arbitrary
 "repo source" string and produce a local checkout that `IngestService`
 can walk.
 

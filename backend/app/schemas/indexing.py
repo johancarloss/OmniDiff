@@ -1,7 +1,7 @@
 """Request/response schemas for the indexing HTTP endpoint.
 
-These are the public surface of `POST /api/index` and
-`GET /api/index/{job_id}`. Kept separate from `schemas/ingest.py` so
+These are the public surface of `POST /api/v1/index` and
+`GET /api/v1/index/{job_id}`. Kept separate from `schemas/ingest.py` so
 the API contract isn't coupled to the internal pipeline DTOs (those
 can churn freely; this can't, since clients depend on them).
 """
@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 
 
 class IndexRequest(BaseModel):
-    """Body of `POST /api/index`.
+    """Body of `POST /api/v1/index`.
 
     `repo_url` is intentionally `str`, not `pydantic.HttpUrl`: we accept
     `git@host:org/repo.git` (SSH-style, not a URL by RFC), `file://`
@@ -26,7 +26,7 @@ class IndexRequest(BaseModel):
 
 
 class IndexAcceptedResponse(BaseModel):
-    """202 response of `POST /api/index`.
+    """202 response of `POST /api/v1/index`.
 
     `job_id` reuses `repository.id` (see Slice 4 DT-1). Clients should
     treat it as opaque — int today, possibly UUID after multi-tenant.
@@ -39,7 +39,7 @@ class IndexAcceptedResponse(BaseModel):
 
 
 class JobStatusResponse(BaseModel):
-    """Response of `GET /api/index/{job_id}`.
+    """Response of `GET /api/v1/index/{job_id}`.
 
     Mirrors the persistable `Repository` columns that callers care
     about. `error_message` is only populated when `status == "failed"`.

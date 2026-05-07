@@ -1,6 +1,6 @@
 """Integration tests for the indexing HTTP endpoint.
 
-These exercise `POST /api/index` and `GET /api/index/{job_id}` end-to-end
+These exercise `POST /api/v1/index` and `GET /api/v1/index/{job_id}` end-to-end
 against a real Postgres (docker compose up -d db) and a temporary git
 fixture repo (5 linear commits, 1 file each).
 
@@ -59,7 +59,7 @@ async def reset_app_engine() -> Iterator[None]:
 def isolated_repos_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]:
     """Override `settings.repos_dir` so the endpoint clones into tmp.
 
-    Without this, real `POST /api/index` calls in tests would dirty the
+    Without this, real `POST /api/v1/index` calls in tests would dirty the
     project's `./repos/` directory with leftover fixture clones.
     """
     repos_dir = tmp_path / "repos"
@@ -80,7 +80,7 @@ async def test_post_index_returns_202_and_job_id(
 ) -> None:
     """Smoke: POST returns 202 with a stable job_id and the right status."""
     response = await client.post(
-        "/api/index",
+        "/api/v1/index",
         json={"repo_url": f"file://{tmp_git_repo}"},
     )
 
@@ -103,13 +103,13 @@ async def test_post_then_poll_returns_completed_with_full_state(
     the POST response returns, so a single GET is enough to observe the
     final state."""
     post_resp = await client.post(
-        "/api/index",
+        "/api/v1/index",
         json={"repo_url": f"file://{tmp_git_repo}"},
     )
     assert post_resp.status_code == 202
     job_id = post_resp.json()["job_id"]
 
-    get_resp = await client.get(f"/api/index/{job_id}")
+    get_resp = await client.get(f"/api/v1/index/{job_id}")
     assert get_resp.status_code == 200
     body = get_resp.json()
 
@@ -126,7 +126,7 @@ async def test_get_job_status_returns_404_for_unknown_id(
     db_engine: AsyncEngine,
     client: AsyncClient,
 ) -> None:
-    response = await client.get("/api/index/999999")
+    response = await client.get("/api/v1/index/999999")
     assert response.status_code == 404
     assert "not found" in response.json()["detail"]
 
@@ -149,7 +149,7 @@ async def test_post_returns_409_when_job_already_indexing(
     db_session.add(repo)
     await db_session.commit()
 
-    response = await client.post("/api/index", json={"repo_url": repo_url})
+    response = await client.post("/api/v1/index", json={"repo_url": repo_url})
 
     assert response.status_code == 409
     assert "already in progress" in response.json()["detail"]
@@ -160,7 +160,7 @@ async def test_post_validates_empty_repo_url(
     client: AsyncClient,
 ) -> None:
     """Pydantic enforces min_length=1 — empty string returns 422."""
-    response = await client.post("/api/index", json={"repo_url": ""})
+    response = await client.post("/api/v1/index", json={"repo_url": ""})
     assert response.status_code == 422
 
 
@@ -171,7 +171,7 @@ async def test_post_rejects_branch_over_max_length(
     isolated_repos_dir: Path,
 ) -> None:
     response = await client.post(
-        "/api/index",
+        "/api/v1/index",
         json={
             "repo_url": f"file://{tmp_git_repo}",
             "branch": "x" * 250,
@@ -190,7 +190,7 @@ async def test_x_request_id_propagates_in_response(
     proving the middleware ran on a real API endpoint (not just the
     standalone Starlette app used in test_request_id_middleware.py)."""
     response = await client.post(
-        "/api/index",
+        "/api/v1/index",
         json={"repo_url": f"file://{tmp_git_repo}"},
         headers={REQUEST_ID_HEADER: "test-trace-9876"},
     )
@@ -210,11 +210,11 @@ async def test_reindex_after_completed_is_incremental(
     finds no new commits, so nothing duplicates in the DB."""
     repo_url = f"file://{tmp_git_repo}"
 
-    first = await client.post("/api/index", json={"repo_url": repo_url})
+    first = await client.post("/api/v1/index", json={"repo_url": repo_url})
     assert first.status_code == 202
     first_id = first.json()["job_id"]
 
-    second = await client.post("/api/index", json={"repo_url": repo_url})
+    second = await client.post("/api/v1/index", json={"repo_url": repo_url})
     assert second.status_code == 202
     assert second.json()["job_id"] == first_id, "same repo URL must reuse job_id"
 

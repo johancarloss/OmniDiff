@@ -3,7 +3,7 @@
 Used by:
     - the CLI (`python -m cli index ...`), where the entire process
       lifetime is one `task_session()` block;
-    - the HTTP endpoint's background task (`POST /api/index`), where the
+    - the HTTP endpoint's background task (`POST /api/v1/index`), where the
       task runs after the request handler has returned and the request's
       session is already closed.
 

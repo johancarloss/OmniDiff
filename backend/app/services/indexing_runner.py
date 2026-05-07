@@ -6,7 +6,7 @@ the CLI's `run_index` (which translates errors into exit codes), this
 runner lives after the response has been sent — there's no caller to
 hand exceptions back to. Errors are logged and the `Repository` row's
 `status` column carries the failure mode forward to whoever polls
-`GET /api/index/{job_id}`.
+`GET /api/v1/index/{job_id}`.
 """
 
 from __future__ import annotations
