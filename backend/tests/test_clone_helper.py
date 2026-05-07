@@ -1,4 +1,4 @@
-"""Unit tests for the CLI's clone helper.
+"""Unit tests for the clone helper.
 
 These run without a database. Where a real `git clone` is needed, we
 use a local `file://` URL pointing to a fixture repo created in tmp.
@@ -13,8 +13,8 @@ from pathlib import Path
 
 import pytest
 
-from cli.clone import (
-    CLIError,
+from app.services.clone import (
+    InvalidRepoSourceError,
     derive_repo_name,
     ensure_local_clone,
     looks_like_url,
@@ -128,7 +128,7 @@ def test_ensure_local_clone_clones_then_fetches_on_second_call(
 
 def test_ensure_local_clone_raises_for_invalid_arg(tmp_path: Path) -> None:
     """Argument that's neither a URL with a known scheme nor an existing
-    directory must raise CLIError."""
+    directory must raise InvalidRepoSourceError."""
     repos_dir = tmp_path / "repos"
-    with pytest.raises(CLIError):
+    with pytest.raises(InvalidRepoSourceError):
         ensure_local_clone("not-a-url-not-a-path", repos_dir)

@@ -20,9 +20,9 @@ import subprocess
 from pathlib import Path
 
 from app.exceptions import IngestError
+from app.services.clone import InvalidRepoSourceError, ensure_local_clone
 from app.services.ingest import IngestService
-from cli.clone import CLIError, ensure_local_clone
-from cli.runner import cli_session
+from app.services.task_session import task_session
 
 logger = logging.getLogger(__name__)
 
@@ -44,10 +44,10 @@ async def run_index(arg: str, repos_dir: Path, *, branch: str | None = None) -> 
         branch: optional ref to index. None = whatever HEAD points to
             in the working tree (current `git log` default).
     """
-    # Step 1: resolve arg → local clone (or raise CLIError on bad input).
+    # Step 1: resolve arg → local clone (or raise InvalidRepoSourceError on bad input).
     try:
         local_path, url, name = ensure_local_clone(arg, repos_dir)
-    except CLIError as exc:
+    except InvalidRepoSourceError as exc:
         logger.error("invalid argument: %s", exc)
         return EXIT_USAGE
     except subprocess.CalledProcessError as exc:
@@ -65,7 +65,7 @@ async def run_index(arg: str, repos_dir: Path, *, branch: str | None = None) -> 
     # Step 2: ingest. Service handles its own concurrency lock; we just
     # translate exceptions to exit codes.
     try:
-        async with cli_session() as session:
+        async with task_session() as session:
             service = IngestService(session)
             result = await service.index(local_path, url=url, name=name, branch=branch)
     except IngestError as exc:
