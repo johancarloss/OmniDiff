@@ -40,18 +40,31 @@ async def test_index_local_repo_inserts_all_commits(
 
 
 async def test_index_is_idempotent(db_session: AsyncSession, tmp_git_repo: Path) -> None:
-    """Re-running index() on the same repo inserts 0 new rows."""
+    """Re-running index() on the same repo inserts 0 new rows.
+
+    Slice 3 changed the underlying mechanic: the second run is now
+    incremental (`since=last_indexed_hash`), so the walker emits 0
+    commits instead of 5-then-skip-via-ON-CONFLICT. Either way, the
+    user-observable invariant holds: zero new rows. We additionally
+    assert the incremental flag is set, locking in the optimization.
+    """
     service = IngestService(db_session)
     url = f"file://{tmp_git_repo}"
 
     first = await service.index(tmp_git_repo, url=url, name="fixture")
     assert first.commits_inserted == 5
+    assert first.was_incremental is False
+    assert first.since_hash is None
 
     second = await service.index(tmp_git_repo, url=url, name="fixture")
-    assert second.total_commits_seen == 5
+    # Incremental walk returns zero new commits (nothing after last_indexed_hash).
     assert second.commits_inserted == 0
+    assert second.total_commits_seen == 0
+    # The optimization is the point of Slice 3 — keep this asserted.
+    assert second.was_incremental is True
+    assert second.since_hash is not None
 
-    # DB still has exactly 5 commits.
+    # DB still has exactly 5 commits — nothing duplicated, nothing lost.
     rows = await db_session.execute(select(Commit))
     assert len(list(rows.scalars())) == 5
 

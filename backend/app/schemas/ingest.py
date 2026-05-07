@@ -78,3 +78,11 @@ class IndexResult(BaseModel):
     chunks_inserted: int = 0
     skipped_merges: int = 0
     duration_seconds: float
+    # True when the run started from `Repository.last_indexed_hash` rather
+    # than from the beginning of history. Surfaced so CLI and HTTP layers
+    # can distinguish cold-start from warm runs in their reports.
+    was_incremental: bool = False
+    # The hash used as the resume point when `was_incremental` is True;
+    # None for cold-start runs. Useful for debugging "why did this run
+    # process N commits?" questions.
+    since_hash: str | None = None
