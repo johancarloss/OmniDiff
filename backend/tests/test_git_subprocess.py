@@ -139,3 +139,26 @@ def test_get_commit_stats_returns_zeros_on_unknown_hash(
     """Unknown commit hash should degrade to (0, 0, 0), not raise."""
     files, ins, dels = get_commit_stats(tmp_git_repo, "0" * 40)
     assert (files, ins, dels) == (0, 0, 0)
+
+
+def test_walk_commits_with_since_returns_only_new(tmp_git_repo: Path) -> None:
+    """`tmp_git_repo` has 5 linear commits; passing the hash of the third
+    commit as `since` must return only the 2 commits after it."""
+    all_metas = walk_commits(tmp_git_repo).metas
+    assert len(all_metas) == 5
+
+    # Use commit index 2 (third in chronological order) as the cutoff.
+    cutoff_hash = all_metas[2].hash
+
+    incremental = walk_commits(tmp_git_repo, since=cutoff_hash).metas
+    assert len(incremental) == 2
+    assert incremental[0].hash == all_metas[3].hash
+    assert incremental[1].hash == all_metas[4].hash
+
+
+def test_walk_commits_with_unknown_since_raises(tmp_git_repo: Path) -> None:
+    """A `since` hash that doesn't exist in the repo (e.g. after a
+    force-push) must raise GitSubprocessError, letting the caller decide
+    whether to fall back to a full walk."""
+    with pytest.raises(GitSubprocessError):
+        walk_commits(tmp_git_repo, since="0" * 40)
