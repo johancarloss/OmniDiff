@@ -35,6 +35,9 @@ class Settings(BaseSettings):
     app_version: str = "0.1.0"
     cors_origins: list[str] = ["http://localhost:5173"]
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
+    # Where the HTTP endpoint (and the CLI's default) clones remote repos.
+    # Path is relative to the process's CWD when running the API or CLI.
+    repos_dir: str = "repos"
 
 
 @lru_cache

@@ -10,6 +10,8 @@ from app.api.router import api_router
 from app.config import get_settings
 from app.database import get_engine
 from app.exceptions import AppError
+from app.middleware.request_id import RequestIDMiddleware
+from app.services.logging_config import setup_logging
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +27,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 def create_app() -> FastAPI:
     settings = get_settings()
+    setup_logging(level=settings.log_level)
 
     app = FastAPI(
         title="OmniDiff",
@@ -33,7 +36,11 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
-    # CORS
+    # Middleware ordering: Starlette runs middleware in REVERSE order of
+    # `add_middleware` calls. We want `RequestIDMiddleware` to be the
+    # outermost layer (first to see the request, last to see the
+    # response) so every response — including CORS preflights — carries
+    # `X-Request-ID`. So it goes last in code, first in execution.
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,
@@ -41,6 +48,7 @@ def create_app() -> FastAPI:
         allow_methods=["GET", "POST", "PUT", "DELETE"],
         allow_headers=["*"],
     )
+    app.add_middleware(RequestIDMiddleware)
 
     # Error handlers
     @app.exception_handler(AppError)
