@@ -56,9 +56,7 @@ async def reset_app_engine() -> Iterator[None]:
 
 
 @pytest.fixture
-def isolated_repos_dir(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> Iterator[Path]:
+def isolated_repos_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]:
     """Override `settings.repos_dir` so the endpoint clones into tmp.
 
     Without this, real `POST /api/index` calls in tests would dirty the
