@@ -1,15 +1,22 @@
-"""Helper module: detect whether a CLI argument is a URL or a local path
-and ensure a usable local clone exists.
+"""Resolve a repository source (URL or local path) into a usable local clone.
+
+This helper is shared between the CLI (`python -m cli index ...`) and the
+HTTP endpoint (`POST /api/index`) — both need to take an arbitrary
+"repo source" string and produce a local checkout that `IngestService`
+can walk.
 
 Behavior:
-    - If `arg` is a URL (https://, ssh://, git@, git://): clone into
-      `repos_dir/<derived_name>` if missing, otherwise fetch + reset.
-    - If `arg` is an existing local path: use it as-is.
-    - Otherwise: raise CLIError.
+    - If the argument is an existing local directory, use it as-is.
+    - If the argument is a URL with a known scheme (https, http, ssh,
+      git, git@, file), clone into `repos_dir/<derived_name>` on first
+      run, fetch + hard-reset on subsequent runs.
+    - Otherwise raise `InvalidRepoSourceError`.
 
-The cloning strategy uses `git clone` for first run and `git fetch` +
-`git reset --hard origin/HEAD` for subsequent runs. This handles
-force-push on the remote without needing special detection.
+Cloning strategy: `git clone` for the first run, `git fetch --prune` +
+`git reset --hard origin/HEAD` for subsequent runs. The reset on
+`origin/HEAD` (the remote's default branch symbolic ref) means we don't
+need to know whether upstream uses `main` or `master`, and it handles
+force-push transparently.
 """
 
 from __future__ import annotations
@@ -22,8 +29,8 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 
-# Regex for "name part" of a URL — matches GitHub / GitLab / Bitbucket-style
-# `<owner>/<repo>(.git)?` paths. Falls back to raw basename otherwise.
+# Matches the trailing `<owner>/<repo>(.git)?` segment of common Git
+# hosting URLs (GitHub, GitLab, Bitbucket, self-hosted via ssh).
 _URL_NAME_RE = re.compile(r"[:/]([^/:]+)/([^/:]+?)(?:\.git)?/?$")
 
 _URL_PREFIXES = (
@@ -32,13 +39,16 @@ _URL_PREFIXES = (
     "ssh://",
     "git://",
     "git@",
-    "file://",  # used by tests and by users who want to index a local
-    # bare repo by URL rather than by path
+    "file://",  # used by tests and by local bare-repo indexing by URL
 )
 
 
-class CLIError(Exception):
-    """Raised when the CLI argument is invalid (not a URL, not a path)."""
+class InvalidRepoSourceError(Exception):
+    """Raised when the input is neither a known-scheme URL nor an existing path.
+
+    Both the CLI and the HTTP endpoint translate this into a user-facing
+    error: CLI exits with a usage code, the API returns 422.
+    """
 
 
 def looks_like_url(arg: str) -> bool:
@@ -47,7 +57,7 @@ def looks_like_url(arg: str) -> bool:
 
 
 def derive_repo_name(url: str) -> str:
-    """Extract a stable directory name from a URL.
+    """Extract a stable directory name from a repo URL.
 
     Examples:
         https://github.com/johancarloss/OmniDiff       → johancarloss__OmniDiff
@@ -61,7 +71,6 @@ def derive_repo_name(url: str) -> str:
     if match is not None:
         owner, name = match.group(1), match.group(2)
         return f"{owner}__{name}"
-    # Fallback: last path segment, stripped of .git.
     return url.rstrip("/").rsplit("/", 1)[-1].removesuffix(".git")
 
 
@@ -84,29 +93,22 @@ def _clone_fresh(url: str, target: Path) -> None:
 
 
 def _refresh_existing(target: Path) -> None:
-    """Fetch + hard reset to origin's default branch.
-
-    `reset --hard` on `origin/HEAD` (the symbolic ref of the remote's
-    default branch) means we don't need to know whether the project
-    uses `main` or `master` — we follow whatever the remote declares.
-    """
     logger.info("refreshing existing clone at %s", target)
     _git("fetch", "--quiet", "--prune", "origin", cwd=target)
     _git("reset", "--quiet", "--hard", "origin/HEAD", cwd=target)
 
 
 def ensure_local_clone(arg: str, repos_dir: Path) -> tuple[Path, str, str]:
-    """Resolve a CLI argument to a local clone.
+    """Resolve a repo source argument to a local clone.
 
     Returns:
         (local_path, canonical_url, repo_name)
 
     Raises:
-        CLIError: if `arg` is neither a known-scheme URL nor an existing path.
-        subprocess.CalledProcessError: if git clone/fetch fails.
+        InvalidRepoSourceError: argument is neither a URL nor an existing dir.
+        subprocess.CalledProcessError: git clone/fetch failed.
+        subprocess.TimeoutExpired: git clone/fetch took longer than 10 min.
     """
-    # Local path takes precedence: if the user passed `.` or an existing
-    # directory, use it directly without trying to interpret as URL.
     candidate_path = Path(arg).resolve()
     if candidate_path.exists() and candidate_path.is_dir():
         url = f"file://{candidate_path}"
@@ -114,7 +116,7 @@ def ensure_local_clone(arg: str, repos_dir: Path) -> tuple[Path, str, str]:
         return (candidate_path, url, name)
 
     if not looks_like_url(arg):
-        raise CLIError(
+        raise InvalidRepoSourceError(
             f"argument is neither a URL with a known scheme nor an existing directory: {arg!r}"
         )
 
