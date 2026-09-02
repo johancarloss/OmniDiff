@@ -16,6 +16,8 @@
 //! - `filters` — skip rules, mirrored from `app/services/ingest_filters.py`.
 //! - `errors` — maps `CoreError` onto Python exceptions.
 
+use std::collections::HashMap;
+
 use pyo3::prelude::*;
 
 use crate::errors::CoreError;
@@ -23,6 +25,56 @@ use crate::errors::CoreError;
 pub mod diff;
 pub mod errors;
 pub mod filters;
+
+/// One `FileDiff` as a Python dict.
+///
+/// Only primitives cross the boundary — no opaque handles — so the
+/// Python side stays mockable in tests. Keys match `FileDiff` in
+/// `app/schemas/ingest.py`. Built as a map rather than a `PyDict` so the
+/// conversion cannot fail: that keeps `PyErr` out of the callers below,
+/// which in turn lets them surface `CoreError` directly.
+fn file_diff_map(py: Python<'_>, fd: &diff::FileDiff) -> HashMap<&'static str, PyObject> {
+    HashMap::from([
+        ("file_path", fd.file_path.clone().into_py(py)),
+        ("old_path", fd.old_path.clone().into_py(py)),
+        (
+            "change_type",
+            fd.change_type.as_char().to_string().into_py(py),
+        ),
+        ("diff_content", fd.diff_content.clone().into_py(py)),
+        ("is_binary", fd.is_binary.into_py(py)),
+        ("truncated", fd.truncated.into_py(py)),
+    ])
+}
+
+/// Per-file diffs for one commit.
+///
+/// Replaces the two `git show` invocations of the Python path: one
+/// libgit2 pass answers both the metadata and the content question.
+#[pyfunction]
+fn extract_file_diffs(
+    py: Python<'_>,
+    repo_path: &str,
+    commit_hash: &str,
+) -> Result<Vec<HashMap<&'static str, PyObject>>, CoreError> {
+    Ok(diff::extract(repo_path, commit_hash)?
+        .iter()
+        .map(|fd| file_diff_map(py, fd))
+        .collect())
+}
+
+/// Per-file diffs for many commits, opening the repository once.
+#[pyfunction]
+fn extract_file_diffs_batch(
+    py: Python<'_>,
+    repo_path: &str,
+    commit_hashes: Vec<String>,
+) -> Result<Vec<Vec<HashMap<&'static str, PyObject>>>, CoreError> {
+    Ok(diff::extract_batch(repo_path, &commit_hashes)?
+        .into_iter()
+        .map(|commit| commit.iter().map(|fd| file_diff_map(py, fd)).collect())
+        .collect())
+}
 
 /// Skip rule for one file inside a commit diff.
 ///
@@ -70,5 +122,7 @@ fn omnidiff_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(should_skip_commit, m)?)?;
     m.add_function(wrap_pyfunction!(commit_stats, m)?)?;
     m.add_function(wrap_pyfunction!(commit_stats_batch, m)?)?;
+    m.add_function(wrap_pyfunction!(extract_file_diffs, m)?)?;
+    m.add_function(wrap_pyfunction!(extract_file_diffs_batch, m)?)?;
     Ok(())
 }
