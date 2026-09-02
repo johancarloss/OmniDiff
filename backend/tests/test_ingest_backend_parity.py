@@ -24,6 +24,15 @@ from app.services.ingest import IngestService
 
 pytestmark = pytest.mark.integration
 
+# Forcing `GIT_BACKEND=rust` raises when the extension is missing — that
+# is the setting's job. Skipping here keeps a clone without a Rust
+# toolchain from failing on it; CI builds the extension, so the parity
+# check still runs where it matters.
+pytest.importorskip(
+    "omnidiff_core",
+    reason="Rust extension not built — run `maturin develop` from core/",
+)
+
 _ENV = {
     "GIT_AUTHOR_NAME": "Test",
     "GIT_AUTHOR_EMAIL": "t@e.com",
