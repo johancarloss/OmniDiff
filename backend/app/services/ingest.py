@@ -9,17 +9,20 @@ from app.models.repository import IndexingStatus
 from app.repositories.chunk_repo import ChunkRepo
 from app.repositories.commit_repo import CommitRepo
 from app.repositories.repository_repo import RepositoryRepo
-from app.schemas.ingest import Chunk, IndexResult
-from app.services._git_subprocess import (
-    GitSubprocessError,
-    extract_file_diffs,
-    get_commit_stats,
-    walk_commits,
-)
+from app.schemas.ingest import Chunk, FileDiff, IndexResult
+from app.services._git_subprocess import GitSubprocessError, walk_commits
+from app.services.git_backend import commit_stats_batch, extract_file_diffs_batch
 from app.services.ingest_chunker import chunk_file_diff
 from app.services.ingest_filters import should_skip_file
 
 logger = logging.getLogger(__name__)
+
+# How many commits' diffs to hold in memory at once. Batching is where
+# the Rust backend earns its speedup — one repository open and one
+# boundary crossing per window — but a window of the whole repo would
+# hold every diff at once, which is fine for 1600 commits and is not for
+# a million.
+COMMIT_BATCH_SIZE = 200
 
 
 class IngestService:
@@ -120,11 +123,11 @@ class IngestService:
 
             metas = walk_result.metas
 
-            # Enrich with shortstat. One subprocess per commit — slow,
-            # but Slice 1 is the BASELINE for the Rust port. Optimizing
-            # this in Python defeats the purpose of the comparison.
-            for meta in metas:
-                files, ins, dels = get_commit_stats(repo_path, meta.hash)
+            # Enrich with per-commit stats. Asked for in one call: the
+            # Rust backend opens the repository once, and the subprocess
+            # fallback loops internally.
+            stats = commit_stats_batch(repo_path, [m.hash for m in metas])
+            for meta, (files, ins, dels) in zip(metas, stats, strict=True):
                 meta.files_changed = files
                 meta.insertions = ins
                 meta.deletions = dels
@@ -141,7 +144,7 @@ class IngestService:
             # diff + chunking rules, so re-doing the work would just
             # repeat I/O. To force re-chunking, call
             # `chunk_repo.delete_by_commit(commit_id)` first.
-            chunks_inserted = 0
+            pending: list[tuple[str, int]] = []
             for meta in metas:
                 commit_id = hash_to_id.get(meta.hash)
                 if commit_id is None:
@@ -150,8 +153,16 @@ class IngestService:
                     continue
                 if await self._chunk_repo.count_by_commit(commit_id) > 0:
                     continue
+                pending.append((meta.hash, commit_id))
 
-                chunks_inserted += await self._chunk_commit(repo_path, meta.hash, commit_id)
+            # Diffs are read a window at a time so the backend can batch,
+            # then chunked and persisted commit by commit.
+            chunks_inserted = 0
+            for offset in range(0, len(pending), COMMIT_BATCH_SIZE):
+                window = pending[offset : offset + COMMIT_BATCH_SIZE]
+                diffs_per_commit = extract_file_diffs_batch(repo_path, [h for h, _ in window])
+                for (_, commit_id), file_diffs in zip(window, diffs_per_commit, strict=True):
+                    chunks_inserted += await self._persist_chunks(commit_id, file_diffs)
 
             total = await self._commit_repo.count_by_repo(repo.id)
             await self._repo_repo.update_counts(repo, total=total, indexed=total)
@@ -186,16 +197,9 @@ class IngestService:
             await self._repo_repo.mark_status(repo, IndexingStatus.FAILED, error=str(exc))
             raise
 
-    async def _chunk_commit(self, repo_path: Path, commit_hash: str, commit_id: int) -> int:
-        """Extract → filter → chunk → persist for one commit. Returns
-        the number of chunks inserted."""
-        try:
-            file_diffs = extract_file_diffs(repo_path, commit_hash)
-        except GitSubprocessError as exc:
-            # Commit-level failure is non-fatal: log + skip, keep going.
-            logger.warning("failed to extract diffs for commit=%s: %s", commit_hash, exc)
-            return 0
-
+    async def _persist_chunks(self, commit_id: int, file_diffs: list[FileDiff]) -> int:
+        """Filter → chunk → persist one commit's diffs. Returns the
+        number of chunks inserted."""
         chunks: list[Chunk] = []
         for fd in file_diffs:
             if should_skip_file(fd.file_path, is_binary_in_git=fd.is_binary):
