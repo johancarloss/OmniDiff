@@ -1,6 +1,7 @@
 """OmniDiff CLI.
 
-Entrypoint: `python -m omnidiff <command> [args]`.
+Entrypoint: `omnidiff <command> [args]` (console script), or
+`python -m cli <command> [args]` from a source checkout.
 
 Commands:
     index <url-or-path>   Index a Git repository.
