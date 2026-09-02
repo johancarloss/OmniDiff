@@ -1,10 +1,10 @@
-"""Implementation of `python -m omnidiff index <arg>`.
+"""Implementation of the `omnidiff index <arg>` subcommand.
 
 This module is the thin glue between argparse output, the clone helper,
 and `IngestService.index`. It encodes the slice's exit-code contract:
 
     0  success
-    1  usage error (invalid arg, path doesn't exist, etc.)
+    1  usage error (bad argv, invalid arg, path doesn't exist, etc.)
     2  git error (clone or fetch failed)
     3  lock contention (another indexer is already running)
     4  unexpected error (DB down, etc.)

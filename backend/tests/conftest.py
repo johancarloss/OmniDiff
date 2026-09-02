@@ -1,9 +1,11 @@
+import os
 import subprocess
 from collections.abc import AsyncGenerator
 from pathlib import Path
 
 import pytest
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -11,16 +13,55 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 
-from app.config import get_settings
-from app.main import app
+from app.config import Settings, get_settings
 from app.models import Base
+from tests.db_isolation import (
+    assert_test_database,
+    database_name,
+    maintenance_database_url,
+    resolve_test_database_url,
+)
+
+# Redirect every reader of DATABASE_URL — the app, the fixtures below and
+# the subprocess-mode CLI tests — to a database of the suite's own. This
+# has to happen before `app.main` is imported and before anything calls
+# `get_settings()`, because `app.database` builds one engine from a
+# cached Settings and the API tests drive the real `app` object rather
+# than overriding `get_session`.
+os.environ["DATABASE_URL"] = resolve_test_database_url(Settings().database_url)
+
+_test_database_ready = False
 
 
 @pytest.fixture
 async def client() -> AsyncGenerator[AsyncClient, None]:
+    from app.main import app  # imported late so the redirect above lands first
+
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         yield ac
+
+
+async def _create_test_database_if_missing(url: str) -> None:
+    """Postgres has no `CREATE DATABASE IF NOT EXISTS`, and the suite's
+    database is deliberately absent from the compose setup."""
+    global _test_database_ready
+    if _test_database_ready:
+        return
+
+    engine = create_async_engine(maintenance_database_url(url), isolation_level="AUTOCOMMIT")
+    try:
+        async with engine.connect() as conn:
+            name = database_name(url)
+            exists = await conn.scalar(
+                text("SELECT 1 FROM pg_database WHERE datname = :name"),
+                {"name": name},
+            )
+            if not exists:
+                await conn.execute(text(f'CREATE DATABASE "{name}"'))
+    finally:
+        await engine.dispose()
+    _test_database_ready = True
 
 
 @pytest.fixture
@@ -40,10 +81,11 @@ async def db_engine() -> AsyncGenerator[AsyncEngine, None]:
     Each test session starts with a clean schema, then rolls back via
     the per-test transaction in `db_session`.
     """
-    from sqlalchemy import text
+    url = get_settings().database_url
+    assert_test_database(url)
+    await _create_test_database_if_missing(url)
 
-    settings = get_settings()
-    engine = create_async_engine(settings.database_url, echo=False)
+    engine = create_async_engine(url, echo=False)
     async with engine.begin() as conn:
         await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
         # Drop+recreate ensures a clean schema each test, since we don't

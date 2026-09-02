@@ -104,12 +104,12 @@ def test_cli_help_does_not_crash(capsys: pytest.CaptureFixture[str]) -> None:
 def test_cli_no_subcommand_returns_usage_error(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """Running with no subcommand fails fast (argparse exits with code
-    2 for missing required args — distinct from our own EXIT_USAGE=1
-    which signals a runtime usage problem)."""
+    """Running with no subcommand fails fast. Argparse's own default is
+    exit 2, which the contract reserves for git failures, so the parser
+    remaps syntax errors onto EXIT_USAGE."""
     with pytest.raises(SystemExit) as exc_info:
         main([])
-    assert exc_info.value.code == 2
+    assert exc_info.value.code == EXIT_USAGE
 
 
 def test_cli_index_with_branch_flag_walks_only_named_branch(

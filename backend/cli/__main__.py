@@ -1,4 +1,4 @@
-"""Entrypoint for `python -m omnidiff`.
+"""Entrypoint for the `omnidiff` console script.
 
 Wires argparse to the command implementations.
 """
@@ -10,25 +10,53 @@ import asyncio
 import logging
 import sys
 from pathlib import Path
+from typing import NoReturn
 
 from cli.index_command import EXIT_USAGE, run_index
 
 
-def _build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        prog="python -m omnidiff",
-        description="OmniDiff CLI — semantic search for Git commits",
-    )
-    parser.add_argument(
+class _Parser(argparse.ArgumentParser):
+    """Argparse exits 2 on a usage error, which this CLI reserves for
+    git failures (EXIT_GIT). Remap it onto the documented contract."""
+
+    def error(self, message: str) -> NoReturn:
+        self.print_usage(sys.stderr)
+        self.exit(EXIT_USAGE, f"{self.prog}: error: {message}\n")
+
+
+def _log_level_flag(default: str) -> _Parser:
+    """A fresh carrier for `--log-level`, so it works on either side of
+    the subcommand.
+
+    Returns a new parser per call on purpose: `parents=` shares Action
+    objects by reference, and the subcommand's copy must keep its own
+    default. The subcommand passes SUPPRESS so that omitting the flag
+    leaves untouched whatever was given before the subcommand.
+    """
+    carrier = _Parser(add_help=False)
+    carrier.add_argument(
         "--log-level",
-        default="INFO",
+        default=default,
         choices=("DEBUG", "INFO", "WARNING", "ERROR"),
         help="logging verbosity (default: INFO)",
+    )
+    return carrier
+
+
+def _build_parser() -> argparse.ArgumentParser:
+    parser = _Parser(
+        prog="omnidiff",
+        description="OmniDiff CLI — semantic search for Git commits",
+        parents=[_log_level_flag("INFO")],
     )
 
     sub = parser.add_subparsers(dest="command", required=True)
 
-    idx = sub.add_parser("index", help="Index a Git repository")
+    idx = sub.add_parser(
+        "index",
+        help="Index a Git repository",
+        parents=[_log_level_flag(argparse.SUPPRESS)],
+    )
     idx.add_argument(
         "repo",
         help=(
