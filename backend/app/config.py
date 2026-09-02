@@ -11,6 +11,11 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
+    # Which implementation reads commit data from git. "auto" prefers the
+    # compiled `omnidiff_core` extension and falls back to subprocess;
+    # "rust" refuses to fall back, so a broken build is not silently slow.
+    git_backend: Literal["auto", "rust", "python"] = "auto"
+
     # Database
     database_url: str = "postgresql+asyncpg://omnidiff:omnidiff@localhost:5432/omnidiff"
 

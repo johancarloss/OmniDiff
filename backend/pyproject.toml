@@ -56,6 +56,9 @@ select = ["E", "F", "I", "N", "UP", "B", "A", "SIM"]
 "app/api/*.py" = ["B008"]  # Depends() in defaults is standard FastAPI
 
 [tool.mypy]
+# `stubs/` holds the hand-written stub for the Rust extension, which
+# ships none of its own. See `stubs/omnidiff_core.pyi`.
+mypy_path = "stubs"
 python_version = "3.12"
 strict = true
 plugins = ["pydantic.mypy"]
