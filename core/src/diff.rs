@@ -1,11 +1,9 @@
 //! Diff extraction — for a given commit, produce per-file diff entries
-//! that the chunker can later split into embeddable chunks.
+//! that the Python chunker splits into embeddable chunks.
 //!
-//! This is intentionally separate from `chunker.rs`:
-//!   - `diff` is about "what changed" (raw structured data)
-//!   - `chunker` is about "how to size the data for embedding"
-//!
-//! Keeping them split lets the chunker stay testable with synthetic input.
+//! Chunking stays in Python (`app/services/ingest_chunker.py`): Phase
+//! 2-B measured that its cost is redundant tokenisation, not language
+//! speed, and `tiktoken` already runs a Rust BPE underneath.
 
 use crate::errors::CoreError;
 

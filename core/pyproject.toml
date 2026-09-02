@@ -26,5 +26,4 @@ Issues = "https://github.com/johancarloss/OmniDiff/issues"
 [tool.maturin]
 features = ["pyo3/extension-module"]
 module-name = "omnidiff_core"
-python-source = "python"
 strip = true

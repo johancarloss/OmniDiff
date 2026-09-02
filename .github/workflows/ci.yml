@@ -45,6 +45,22 @@ jobs:
         run: uv run mypy --strict app/ cli/
       - name: Run alembic migrations
         run: uv run alembic upgrade head
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+      - name: Cache cargo registry & target
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            core/target
+          key: cargo-pyext-${{ runner.os }}-${{ hashFiles('core/Cargo.toml') }}
+          restore-keys: |
+            cargo-pyext-${{ runner.os }}-
+      - name: Build Rust extension
+        # Without this the Rust/Python equivalence tests skip themselves,
+        # and the twin-implementation guard stops guarding.
+        run: uv run maturin develop -m ../core/Cargo.toml
       - name: Tests
         run: uv run pytest tests/ -v
 

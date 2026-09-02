@@ -39,7 +39,9 @@ repos/
 
 # Rust core layer (build artifacts)
 core/target/
-core/Cargo.lock
+# core/Cargo.lock is tracked on purpose: the crate ships as a wheel
+# (see .github/workflows/build-wheels.yml), so release builds must
+# resolve to pinned versions. See ARCH-013.
 *.so
 *.pyd
 *.dylib
