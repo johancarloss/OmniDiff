@@ -22,9 +22,28 @@ pub mod diff;
 pub mod errors;
 pub mod filters;
 
+/// Skip rule for one file inside a commit diff.
+///
+/// `is_binary_in_git` is keyword-only to mirror the Python signature in
+/// `app/services/ingest_filters.py`, so the equivalence tests can call
+/// both sides identically.
+#[pyfunction]
+#[pyo3(signature = (path, *, is_binary_in_git))]
+fn should_skip_file(path: &str, is_binary_in_git: bool) -> bool {
+    filters::should_skip_file(path, is_binary_in_git)
+}
+
+/// Skip rule for a commit. Merge commits are skipped.
+#[pyfunction]
+fn should_skip_commit(parent_count: usize) -> bool {
+    filters::should_skip_commit(parent_count)
+}
+
 /// Module entrypoint — registered with Python as `omnidiff_core`.
 #[pymodule]
 fn omnidiff_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
+    m.add_function(wrap_pyfunction!(should_skip_file, m)?)?;
+    m.add_function(wrap_pyfunction!(should_skip_commit, m)?)?;
     Ok(())
 }
