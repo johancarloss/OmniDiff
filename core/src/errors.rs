@@ -15,9 +15,6 @@ pub enum CoreError {
     #[error("invalid argument: {0}")]
     Invalid(String),
 
-    #[error("tokenizer error: {0}")]
-    Tokenizer(String),
-
     #[error("io error: {0}")]
     Io(#[from] std::io::Error),
 }
@@ -28,7 +25,6 @@ impl From<CoreError> for PyErr {
             CoreError::Invalid(msg) => PyValueError::new_err(msg),
             CoreError::Io(e) => PyIOError::new_err(e.to_string()),
             CoreError::Git(e) => PyRuntimeError::new_err(format!("git: {e}")),
-            CoreError::Tokenizer(msg) => PyRuntimeError::new_err(format!("tokenizer: {msg}")),
         }
     }
 }
