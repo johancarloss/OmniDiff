@@ -179,8 +179,10 @@ What was left is worth doing. Reading a commit's diff meant three
 `git show` invocations, each locating the commit, decompressing it and
 recomputing the same diff, differing only in output format. libgit2 opens
 the commit once and answers all three questions from one object.
-Indexing 1620 commits of `pallets/flask` went from **41.7 s to 29.2 s**,
-with the git layer itself dropping from 14.5 s to 3.6 s.
+Indexing 1620 commits of `pallets/flask` went from **41.7 s to 18.5 s**:
+the git layer dropped from 14.5 s to 3.6 s, and the redundant tokenising
+it exposed — the same text measured three times — from 16.7 s to 6.9 s
+with no Rust involved at all.
 
 The subprocess implementation stays in the tree, selectable through
 `GIT_BACKEND`, as the reference both paths are tested against.
