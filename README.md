@@ -91,9 +91,9 @@ This is the same pattern used by `uv`, `ruff`, and `pydantic-core`.
 │  CORE  (Rust)    │         │   PostgreSQL 17 + pgvector           │
 │  PyO3 + maturin  │         │   HNSW index · 1024-dim vectors      │
 │                  │         │                                       │
-│  · Git walking   │         │   repositories · commits ·           │
+│  · Commit stats  │         │   repositories · commits ·           │
 │  · Diff parsing  │         │   commit_chunks (with embeddings)    │
-│  · Chunking      │         └──────────────────────────────────────┘
+│  · Rename detect │         └──────────────────────────────────────┘
 │  · Filtering     │
 │                  │         ┌──────────────────────────────────────┐
 │  CPU-bound work  │         │   AI providers (free tiers)          │
@@ -110,7 +110,7 @@ This is the same pattern used by `uv`, `ruff`, and `pydantic-core`.
 |-------|-----------|-----|
 | Frontend | React 19, Tailwind CSS v4, shadcn/ui, Motion | Modern, fast, copy-paste components, dark-mode native |
 | Backend (orchestration) | Python 3.12, FastAPI, SQLAlchemy 2.0 async | Best-in-class async I/O, pluggable provider layer |
-| Performance layer | Rust + PyO3 + git2 + rayon | Native speed for diff parsing, parallel chunking without GIL |
+| Performance layer | Rust + PyO3 + git2 (libgit2) | Reads commit diffs in-process: one pass per commit instead of three `git show` subprocesses |
 | Database | PostgreSQL 17 + pgvector (HNSW) | Single-store for relational + vector data; HNSW for recall |
 | Embeddings | Voyage AI `voyage-code-3` | Best embedding model for code (97.3% MRR on CodeSearchNet) |
 | LLM (interactive) | Gemini 2.5 Pro / Groq Llama 70B | Free tiers, low latency |
@@ -155,12 +155,35 @@ document will be published alongside the first working prototype.
 |-------|-------|--------|
 | 1 | Setup & infrastructure (Docker Compose, FastAPI bootstrap, schema, providers) | ✅ Complete |
 | 2-A | Git ingestion pipeline (Python baseline) | ✅ Complete |
-| 2-B | Profiling — identify the hot path | 🚧 Next |
-| 2-C | Performance layer in Rust (port hot path via PyO3) | ⏳ Planned |
+| 2-B | Profiling — identify the hot path | ✅ Complete |
+| 2-C | Performance layer in Rust — git layer via PyO3 | ✅ Complete |
 | 3 | Embedding pipeline (Voyage + Groq descriptions, HNSW index) | ⏳ Planned |
 | 4 | Search engine (semantic + keyword + RRF + LLM explanation) | ⏳ Planned |
 | 5 | Frontend core (Linear-style UI with animations) | ⏳ Planned |
 | 6 | Self-referential demo, public release, polish | ⏳ Planned |
+
+### On the Rust layer
+
+Profiling shaped this more than planning did. The original scope had four
+areas moving to Rust: commit walking, diff parsing, chunking and
+tokenisation. Measuring first cut that to one.
+
+Walking turned out to cost nothing — a single `git log` covers a whole
+repository. Tokenisation was the largest single cost in the pipeline, and
+also the wrong target: `tiktoken` already runs a Rust BPE behind PyO3, so
+porting it would have swapped Rust for Rust. Its real cost is redundancy,
+the same text tokenised three times, which is a matter of algorithm and
+costs the same in any language.
+
+What was left is worth doing. Reading a commit's diff meant three
+`git show` invocations, each locating the commit, decompressing it and
+recomputing the same diff, differing only in output format. libgit2 opens
+the commit once and answers all three questions from one object.
+Indexing 1620 commits of `pallets/flask` went from **41.7 s to 29.2 s**,
+with the git layer itself dropping from 14.5 s to 3.6 s.
+
+The subprocess implementation stays in the tree, selectable through
+`GIT_BACKEND`, as the reference both paths are tested against.
 
 ## License
 
