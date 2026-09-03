@@ -137,3 +137,72 @@ def test_empty_diff_content_returns_no_chunks() -> None:
         is_binary=False,
     )
     assert chunk_file_diff(fd) == []
+
+
+def test_tokens_used_is_the_sum_of_line_counts() -> None:
+    """The contract the single-pass chunker actually offers.
+
+    Sizes are derived from one per-line pass, so `tokens_used` is the sum
+    of the chunk's line counts rather than a count of the chunk taken
+    whole. The two agree for most text and part ways where BPE would have
+    merged a pair across a line break.
+    """
+    chunks = chunk_file_diff(_make_diff(SMALL_DIFF))
+    for chunk in chunks:
+        expected = sum(count_tokens(line) for line in chunk.diff_content.splitlines(keepends=True))
+        assert chunk.tokens_used == expected
+
+
+def test_tokens_used_never_undercounts_the_whole_text() -> None:
+    """Per-line counting errs high, and high is the safe direction.
+
+    A budget that overshoots produces chunks slightly under the limit; one
+    that undershoots produces chunks over it, which is what the limit
+    exists to prevent.
+    """
+    padding = "\n".join(f"+ filler line {i}" for i in range(400))
+    big = (
+        "diff --git a/foo.py b/foo.py\n"
+        "--- a/foo.py\n"
+        "+++ b/foo.py\n"
+        "@@ -1,1 +1,1 @@\n" + padding + "\n"
+    )
+    for chunk in chunk_file_diff(_make_diff(big)):
+        assert chunk.tokens_used >= count_tokens(chunk.diff_content)
+
+
+def test_chunk_text_reassembles_the_original_diff() -> None:
+    """Splitting into lines and joining back must be lossless.
+
+    `str.splitlines` breaks on more than `\\n` — form feeds and unicode
+    line separators among them — so a chunker built on it has to put the
+    text back byte for byte.
+    """
+    odd = (
+        "diff --git a/x.py b/x.py\n"
+        "--- a/x.py\n"
+        "+++ b/x.py\n"
+        "@@ -1,2 +1,2 @@\n"
+        "-old\r\n"
+        "+new\x0cwith form feed\n"
+        "+trailing no newline"
+    )
+    (chunk,) = chunk_file_diff(_make_diff(odd))
+    assert chunk.diff_content == odd
+
+
+def test_header_stays_with_the_first_hunk() -> None:
+    """Everything before the first `@@` belongs to the first hunk, so the
+    model still sees which file it is looking at."""
+    padding = "\n".join(f"+ filler line {i}" for i in range(60))
+    two_hunks = (
+        "diff --git a/foo.py b/foo.py\n"
+        "--- a/foo.py\n"
+        "+++ b/foo.py\n"
+        "@@ -1,1 +1,1 @@\n" + padding + "\n"
+        "@@ -50,1 +50,1 @@\n" + padding + "\n"
+    )
+    chunks = chunk_file_diff(_make_diff(two_hunks))
+    assert len(chunks) == 2
+    assert chunks[0].diff_content.startswith("diff --git a/foo.py b/foo.py\n")
+    assert chunks[1].diff_content.startswith("@@ -50,1 +50,1 @@\n")
